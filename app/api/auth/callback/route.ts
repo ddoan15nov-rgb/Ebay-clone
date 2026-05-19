@@ -6,10 +6,14 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get('code');
   const error = searchParams.get('error');
   
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host') || 'localhost:3000';
+  const proto = request.headers.get('x-forwarded-proto') || (host.includes('localhost') ? 'http' : 'https');
+  const baseUrl = `${proto}://${host}`;
+
   // If the user declined or eBay returned an error
   if (error) {
     const errorDesc = searchParams.get('error_description') || error;
-    return NextResponse.redirect(new URL(`/?authError=${encodeURIComponent(errorDesc)}`, request.url));
+    return NextResponse.redirect(new URL(`/?authError=${encodeURIComponent(errorDesc)}`, baseUrl));
   }
 
   if (!code) {
@@ -46,7 +50,7 @@ export async function GET(request: NextRequest) {
 
     if (!res.ok) {
       console.error('eBay Token Error:', data);
-      return NextResponse.redirect(new URL(`/?authError=${encodeURIComponent(data.error_description || 'Token exchange failed')}`, request.url));
+      return NextResponse.redirect(new URL(`/?authError=${encodeURIComponent(data.error_description || 'Token exchange failed')}`, baseUrl));
     }
 
     // Set the user access token in an HTTP-only cookie
@@ -60,8 +64,6 @@ export async function GET(request: NextRequest) {
       path: '/',
     });
 
-    // We could also store the refresh_token if we wanted to keep them logged in forever,
-    // but for now, forcing a re-login every 2 hours is fine for a personal tool.
     if (data.refresh_token) {
       cookies().set({
         name: 'ebay_refresh_token',
@@ -75,9 +77,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Redirect back to the homepage
-    return NextResponse.redirect(new URL('/?authSuccess=true', request.url));
+    return NextResponse.redirect(new URL('/?authSuccess=true', baseUrl));
   } catch (error) {
     console.error('OAuth Callback Exception:', error);
-    return NextResponse.redirect(new URL('/?authError=Server_Exception', request.url));
+    return NextResponse.redirect(new URL('/?authError=Server_Exception', baseUrl));
   }
 }
