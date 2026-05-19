@@ -78,8 +78,8 @@ export async function GET(
     const items = (data.itemSummaries || []).map((item: any) => ({
       itemId: String(item.itemId).replace('v1|', '').replace('|0', ''),
       title: item.title,
-      price: item.price?.value || '0',
-      currency: item.price?.currency || 'USD',
+      price: item.currentBidPrice?.value || item.price?.value || '0',
+      currency: item.currentBidPrice?.currency || item.price?.currency || 'USD',
       imageUrl: item.thumbnailImages?.[0]?.imageUrl || item.image?.imageUrl || '',
       itemWebUrl: item.itemWebUrl || '',
       endTime: item.itemEndDate || '',

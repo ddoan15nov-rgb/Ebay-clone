@@ -78,8 +78,8 @@ async function fetchItemWithBrowseAPI(itemId: string) {
   return {
     itemId: String(item.itemId).replace('v1|', '').replace('|0', ''),
     title: item.title || `eBay Item #${itemId}`,
-    price: item.price?.value || item.estimatedAvailabilities?.[0]?.estimatedSoldPrice?.value || '0',
-    currency: item.price?.currency || 'USD',
+    price: item.currentBidPrice?.value || item.price?.value || item.estimatedAvailabilities?.[0]?.estimatedSoldPrice?.value || '0',
+    currency: item.currentBidPrice?.currency || item.price?.currency || 'USD',
     imageUrl: primaryImage,
     images: images.length > 0 ? images : [primaryImage],
     itemWebUrl: item.itemWebUrl || `https://www.ebay.com/itm/${itemId}`,

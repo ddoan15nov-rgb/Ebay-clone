@@ -137,8 +137,8 @@ export async function GET(request: NextRequest) {
       .map((item: Record<string, unknown>) => ({
         itemId: String(item.itemId).replace('v1|', '').replace('|0', ''),
         title: item.title,
-        price: (item.price as Record<string, string>)?.value || '0',
-        currency: (item.price as Record<string, string>)?.currency || 'USD',
+        price: (item.currentBidPrice as Record<string, string>)?.value || (item.price as Record<string, string>)?.value || '0',
+        currency: (item.currentBidPrice as Record<string, string>)?.currency || (item.price as Record<string, string>)?.currency || 'USD',
         imageUrl: ((item.thumbnailImages as Record<string, string>[]) || [])[0]?.imageUrl
           || (item.image as Record<string, string>)?.imageUrl
           || '',
