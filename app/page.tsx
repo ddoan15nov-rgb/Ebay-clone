@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { SlidersHorizontal, RefreshCw, Wifi, WifiOff, Search, X, Link as LinkIcon } from 'lucide-react';
 import ItemCard from '@/components/ItemCard';
+import ItemCardSkeleton from '@/components/ItemCardSkeleton';
 import FilterDrawer from '@/components/FilterDrawer';
 import { useFavorites, useBlockedSellers, useLocalStorage } from '@/hooks/useLocalStorage';
 import { EbayItem, FilterState, DEFAULT_FILTERS, KEYWORDS } from '@/lib/types';
@@ -445,8 +446,8 @@ export default function HomePage() {
 
       {/* Item grid */}
       {loading && items.length === 0 ? (
-        <div className="loading-center">
-          <div className="spinner" />
+        <div className="item-grid">
+          <ItemCardSkeleton count={6} />
         </div>
       ) : visibleItems.length === 0 ? (
         <div className="empty-state">

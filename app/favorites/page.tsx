@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Heart, Search, Clock } from 'lucide-react';
 import ItemCard from '@/components/ItemCard';
+import ItemCardSkeleton from '@/components/ItemCardSkeleton';
 import { useFavorites, useBlockedSellers } from '@/hooks/useLocalStorage';
 import { EbayItem } from '@/lib/types';
 
@@ -182,9 +183,9 @@ export default function FavoritesPage() {
       </div>
 
       {/* Search bar */}
-      <div style={{
+      <div className="glass-header" style={{
         position: 'sticky', top: 0, zIndex: 10,
-        padding: '8px 0 12px', background: 'var(--bg)',
+        padding: '8px 0 12px',
       }}>
         <div style={{
           display: 'flex', alignItems: 'center', gap: 10,
@@ -220,8 +221,8 @@ export default function FavoritesPage() {
       </div>
 
       {loading ? (
-        <div className="loading-center" style={{ minHeight: '40dvh' }}>
-          <div className="spinner" />
+        <div className="item-grid">
+          <ItemCardSkeleton count={4} />
         </div>
       ) : currentItems.length === 0 ? (
         <div className="empty-state">

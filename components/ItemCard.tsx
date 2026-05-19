@@ -24,6 +24,7 @@ export default function ItemCard({
 }: ItemCardProps) {
   const { display, isEnded } = useCountdown(item.endTime);
   const isAuction = item.listingType === 'AUCTION';
+  const [imageError, setImageError] = React.useState(!item.imageUrl);
 
   // Don't show timer for FIXED_PRICE items that have "ended"
   // (they're still available for purchase, the endTime is just a listing renewal date)
@@ -38,19 +39,39 @@ export default function ItemCard({
         {/* Image area */}
         <div style={{ position: 'relative', paddingTop: '100%', background: 'var(--surface)' }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={item.imageUrl}
-            alt={item.title}
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-            }}
-            loading="lazy"
-          />
+          {imageError ? (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                background: 'radial-gradient(circle at 30% 30%, #2a2a2a, #0a0a0a)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '2rem',
+              }}
+            >
+              🥇
+            </div>
+          ) : (
+            <img
+              src={item.imageUrl}
+              alt={item.title}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+              }}
+              loading="lazy"
+              onError={() => setImageError(true)}
+            />
+          )}
 
           {/* Timer badge — only for auctions */}
           {showTimer && (
@@ -72,6 +93,7 @@ export default function ItemCard({
                   color: '#fff',
                   backdropFilter: 'blur(4px)',
                   letterSpacing: '0.02em',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
                 }}
               >
                 <Clock size={10} />
@@ -95,6 +117,7 @@ export default function ItemCard({
                   background: 'rgba(46, 204, 113, 0.9)',
                   color: '#fff',
                   backdropFilter: 'blur(4px)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
                 }}
               >
                 Mua Ngay
@@ -117,6 +140,7 @@ export default function ItemCard({
                   background: 'rgba(0, 0, 0, 0.75)',
                   color: '#fff',
                   backdropFilter: 'blur(4px)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
                 }}
               >
                 <Gavel size={10} />
@@ -140,6 +164,7 @@ export default function ItemCard({
                   background: 'rgba(212, 175, 55, 0.9)',
                   color: '#000',
                   backdropFilter: 'blur(4px)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
                 }}
               >
                 <Crosshair size={9} />

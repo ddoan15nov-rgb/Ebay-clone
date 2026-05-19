@@ -76,7 +76,7 @@ export async function GET(
 
     const data = await res.json();
     const items = (data.itemSummaries || []).map((item: any) => ({
-      itemId: item.itemId,
+      itemId: String(item.itemId).replace('v1|', '').replace('|0', ''),
       title: item.title,
       price: item.price?.value || '0',
       currency: item.price?.currency || 'USD',

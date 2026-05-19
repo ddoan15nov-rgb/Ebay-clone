@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { ArrowLeft, Star, User, ExternalLink } from 'lucide-react';
 import ItemCard from '@/components/ItemCard';
+import ItemCardSkeleton from '@/components/ItemCardSkeleton';
 import { useFavorites, useBlockedSellers } from '@/hooks/useLocalStorage';
 import { EbayItem } from '@/lib/types';
 
@@ -99,10 +100,9 @@ export default function SellerPage() {
   return (
     <div className="page-container" style={{ paddingTop: 0 }}>
       {/* Header */}
-      <div style={{
+      <div className="glass-header" style={{
         position: 'sticky', top: 0, zIndex: 20,
-        background: 'var(--bg)', padding: '12px 0 8px',
-        borderBottom: '1px solid var(--border)',
+        padding: '12px 0 8px',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
           <button
@@ -166,8 +166,8 @@ export default function SellerPage() {
 
       {/* Items grid */}
       {loading ? (
-        <div className="loading-center" style={{ minHeight: '50dvh' }}>
-          <div className="spinner" />
+        <div className="item-grid" style={{ marginTop: 12 }}>
+          <ItemCardSkeleton count={4} />
         </div>
       ) : items.length === 0 ? (
         <div className="empty-state" style={{ marginTop: 40 }}>
