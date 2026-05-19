@@ -65,92 +65,28 @@ async function addSnipeViaGixen(
 
     // Step 1: Go to Gixen login page
     await page.goto('https://www.gixen.com/main/index.php', {
-      waitUntil: 'networkidle2',
-      timeout: 15000,
+      waitUntil: 'domcontentloaded',
+      timeout: 10000,
     });
 
-    // Step 2: Fill and submit login form via JS (bypasses hidden/duplicate elements)
+    // Step 2: Fill and submit login form via JS
     await page.evaluate(
       (user: string, pass: string) => {
-        const forms = document.querySelectorAll('form[action*="home_1.php"]');
-        // Use the first form found
-        const form = forms[0] as HTMLFormElement;
-        if (!form) return;
-
-        const userInput = form.querySelector('input[name="username"]') as HTMLInputElement;
-        const passInput = form.querySelector('input[name="password"]') as HTMLInputElement;
+        const userInput = document.querySelector('input[name="username"]') as HTMLInputElement;
+        const passInput = document.querySelector('input[name="password"]') as HTMLInputElement;
+        const form = userInput?.closest('form');
         if (userInput) userInput.value = user;
         if (passInput) passInput.value = pass;
-        form.submit();
+        if (form) form.submit();
       },
       username,
       password
     );
 
-    // Wait for login to process
-    await new Promise((r) => setTimeout(r, 3000));
+    // Step 3: Wait for redirect to complete and #newitemid to appear (takes 4-6s)
+    await page.waitForSelector('#newitemid', { timeout: 10000 });
 
-    // Step 3: Go to Gixen root (logged-in session shows "BACK TO MY SNIPES")
-    await page.goto('https://www.gixen.com/index.php', {
-      waitUntil: 'networkidle2',
-      timeout: 15000,
-    });
-    await new Promise((r) => setTimeout(r, 1500));
-
-    // Find the "BACK TO MY SNIPES" link and extract its URL
-    const snipesLink = await page.evaluate(() => {
-      const links = Array.from(document.querySelectorAll('a'));
-      for (const link of links) {
-        if (link.textContent?.includes('MY SNIPES') || link.textContent?.includes('My Snipes')) {
-          return link.href;
-        }
-      }
-      // Also check for the href that the logged-in nav uses
-      const navLink = document.querySelector('a[href*="home_2"], a[href*="snipes"]');
-      return navLink ? (navLink as HTMLAnchorElement).href : null;
-    });
-
-    console.log(`[GIXEN DEBUG] My Snipes link: ${snipesLink}`);
-
-    if (snipesLink) {
-      await page.goto(snipesLink, {
-        waitUntil: 'networkidle2',
-        timeout: 15000,
-      });
-    }
-    await new Promise((r) => setTimeout(r, 2000));
-
-    // Try again to find the input
-    const itemIdField = await page.$('input[name="newitemid"]');
-    const maxBidField = await page.$('input[name="newmaxbid"]');
-
-    if (!itemIdField || !maxBidField) {
-      // Save debug screenshot
-      await page.screenshot({ path: '/tmp/gixen_debug.png', fullPage: true });
-
-      const pageUrl = page.url();
-      const pageTitle = await page.title();
-      const debugInfo = await page.content();
-      const hasLoginForm = debugInfo.includes('name="signin"') || debugInfo.includes('Log in Now');
-      const hasCookieError = debugInfo.includes('Cookies are disabled');
-      const hasSnipeText = debugInfo.includes('Your snipes') || debugInfo.includes('newitemid');
-
-      console.log(`[GIXEN DEBUG] URL: ${pageUrl}`);
-      console.log(`[GIXEN DEBUG] Title: ${pageTitle}`);
-      console.log(`[GIXEN DEBUG] Has login form: ${hasLoginForm}`);
-      console.log(`[GIXEN DEBUG] Cookie error: ${hasCookieError}`);
-      console.log(`[GIXEN DEBUG] Has snipe form: ${hasSnipeText}`);
-
-      let errorMsg = 'FORM_NOT_FOUND';
-      if (hasCookieError) {
-        errorMsg = 'COOKIE_ERROR: Gixen không nhận cookie — thử lại';
-      } else if (hasLoginForm) {
-        errorMsg = 'LOGIN_FAILED: Sai tên đăng nhập hoặc mật khẩu Gixen';
-      }
-      throw new Error(errorMsg);
-    }
-
-    // Step 4.5: Check if the snipe already exists and delete it first (so "Update" works)
+    // Step 4: Check if the snipe already exists and delete it first (so "Update" works)
     const existsAndDelete = await page.evaluate((id: string) => {
       const itemInput = document.querySelector(`input[name="edititemid"][value="${id}"]`);
       if (itemInput) {
@@ -168,22 +104,20 @@ async function addSnipeViaGixen(
 
     if (existsAndDelete) {
       // Wait for delete to process and page to reload
-      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 15000 }).catch(() => {});
-      await new Promise((r) => setTimeout(r, 1500));
+      await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {});
+      await page.waitForSelector('#newitemid', { timeout: 5000 }).catch(() => {});
     }
 
-    // Step 5: Fill in the snipe form using JavaScript to guarantee values are set
+    // Step 5: Fill in the snipe form and submit
     await page.evaluate(
       (itemIdValue: string, maxBidValue: string) => {
-        // Look for the add snipe form
         const itemIdField = document.querySelector('input[name="newitemid"]') as HTMLInputElement;
         const maxBidField = document.querySelector('input[name="newmaxbid"]') as HTMLInputElement;
         
         if (itemIdField) itemIdField.value = itemIdValue;
         if (maxBidField) maxBidField.value = maxBidValue;
         
-        // Find and click the Add button
-        const addButton = document.querySelector('input[value="Add"], input[value="add"], input[type="submit"][value*="Add"]') as HTMLInputElement;
+        const addButton = document.querySelector('input[value=" Add "], input[value="Add"], input[value="add"], input[type="submit"][value*="Add"]') as HTMLInputElement;
         if (addButton) {
           addButton.click();
         } else if (maxBidField && maxBidField.form) {
@@ -195,10 +129,9 @@ async function addSnipeViaGixen(
     );
 
     // Wait for the response
-    await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => {});
-    await new Promise((r) => setTimeout(r, 1500));
+    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {});
 
-    // Step 7: Verify the snipe was added by checking the page content
+    // Step 6: Verify the snipe was added
     const pageContent = await page.content();
     const hasItemId = pageContent.includes(String(itemId));
     const hasError = pageContent.toLowerCase().includes('error') && !pageContent.includes('Error (');
@@ -209,7 +142,6 @@ async function addSnipeViaGixen(
         message: `✅ Đã đặt snipe $${maxBid} cho item #${itemId} trên Gixen thành công!`,
       };
     } else {
-      // It might still have worked — Gixen's response is sometimes ambiguous
       return {
         success: true,
         message: `Đã gửi snipe $${maxBid} cho #${itemId} — kiểm tra trên gixen.com để xác nhận`,
@@ -233,69 +165,33 @@ async function deleteSnipeViaGixen(
       'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36'
     );
 
-    // Login
+    // Step 1: Go to Gixen login page
     await page.goto('https://www.gixen.com/main/index.php', {
-      waitUntil: 'networkidle2',
-      timeout: 15000,
+      waitUntil: 'domcontentloaded',
+      timeout: 10000,
     });
 
-    // Step 2: Fill and submit login form via JS (bypasses hidden/duplicate elements)
+    // Step 2: Fill and submit login form via JS
     await page.evaluate(
       (user: string, pass: string) => {
-        const forms = document.querySelectorAll('form[action*="home_1.php"]');
-        // Use the first form found
-        const form = forms[0] as HTMLFormElement;
-        if (!form) return;
-
-        const userInput = form.querySelector('input[name="username"]') as HTMLInputElement;
-        const passInput = form.querySelector('input[name="password"]') as HTMLInputElement;
+        const userInput = document.querySelector('input[name="username"]') as HTMLInputElement;
+        const passInput = document.querySelector('input[name="password"]') as HTMLInputElement;
+        const form = userInput?.closest('form');
         if (userInput) userInput.value = user;
         if (passInput) passInput.value = pass;
-        form.submit();
+        if (form) form.submit();
       },
       username,
       password
     );
 
-    // Wait for meta-redirect after login
-    await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => {});
-    await new Promise((r) => setTimeout(r, 1500));
+    // Step 3: Wait for redirect to complete
+    await page.waitForSelector('#newitemid', { timeout: 10000 });
 
-    // Step 3: Go directly to the My Snipes page
-    await page.goto('https://www.gixen.com/index.php', {
-      waitUntil: 'networkidle2',
-      timeout: 15000,
-    });
-    await new Promise((r) => setTimeout(r, 1500));
-
-    // Find the "BACK TO MY SNIPES" link and extract its URL
-    const snipesLink = await page.evaluate(() => {
-      const links = Array.from(document.querySelectorAll('a'));
-      for (const link of links) {
-        if (link.textContent?.includes('MY SNIPES') || link.textContent?.includes('My Snipes')) {
-          return link.href;
-        }
-      }
-      const navLink = document.querySelector('a[href*="home_2"], a[href*="snipes"]');
-      return navLink ? (navLink as HTMLAnchorElement).href : null;
-    });
-
-    if (snipesLink) {
-      await page.goto(snipesLink, {
-        waitUntil: 'networkidle2',
-        timeout: 15000,
-      });
-    }
-    await new Promise((r) => setTimeout(r, 2000));
-
-    // Find and click the delete button for this item using page.evaluate
+    // Step 4: Find and click the delete button for this item
     const deleted = await page.evaluate((id: string) => {
-      // Find the hidden input with this item ID
       const itemInput = document.querySelector(`input[name="edititemid"][value="${id}"]`);
       if (itemInput) {
-        // The delete form is usually in the next cell or nearby
-        // A robust way: find all forms with a Delete submit button, 
-        // but since we only have the dbidid, let's find the row (tr) and then the delete button in that row
         const row = itemInput.closest('tr');
         if (row) {
           const deleteBtn = row.querySelector('input[type="submit"][value="Delete"], input[type="submit"][value="delete"]') as HTMLInputElement;
@@ -309,7 +205,7 @@ async function deleteSnipeViaGixen(
     }, itemId);
 
     if (deleted) {
-      await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => {});
+      await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 8000 }).catch(() => {});
       return { success: true, message: `Đã xóa snipe cho item #${itemId}` };
     }
 
