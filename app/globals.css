@@ -712,3 +712,9 @@ body {
 body.no-tab-bar {
   padding-bottom: var(--safe-bottom) !important;
 }
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}

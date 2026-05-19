@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useCallback } from 'react';
-import { X, Delete } from 'lucide-react';
+import React, { useState, useCallback, useEffect } from 'react';
+import { X, Delete, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface CalculatorProps {
   open: boolean;
@@ -18,7 +18,15 @@ export default function Calculator({ open, onClose, initialValue }: CalculatorPr
   const [expression, setExpression] = useState(initialValue || '0');
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [isCalculated, setIsCalculated] = useState(false);
+  const [cursorPos, setCursorPos] = useState<number | null>(null);
   const displayRef = React.useRef<HTMLDivElement>(null);
+
+  // Sync cursor with external changes
+  useEffect(() => {
+    if (initialValue) {
+      setCursorPos(initialValue.length);
+    }
+  }, [initialValue]);
 
   // Auto-scroll history to bottom
   const scrollToBottom = () => {
@@ -48,59 +56,96 @@ export default function Calculator({ open, onClose, initialValue }: CalculatorPr
     }
   };
 
-  const inputDigit = useCallback((digit: string) => {
+  const moveCursor = useCallback((delta: number) => {
+    if (isCalculated) setIsCalculated(false);
+    setCursorPos((prev) => {
+      const current = prev === null ? expression.length : prev;
+      let next = current + delta;
+      
+      // Skip over spaces around operators " + " (3 chars)
+      if (delta < 0 && expression.charAt(next) === ' ' && next >= 2) {
+        next -= 2;
+      } else if (delta > 0 && expression.charAt(next - 1) === ' ' && next <= expression.length - 2) {
+        next += 2;
+      }
+      
+      return Math.max(0, Math.min(expression.length, next));
+    });
+  }, [expression, isCalculated]);
+
+  const insertText = useCallback((text: string) => {
     if (isCalculated) {
-      setExpression(digit);
+      setExpression(text);
+      setCursorPos(text.length);
       setIsCalculated(false);
-    } else {
-      setExpression((prev) => (prev === '0' ? digit : prev + digit));
+      return;
     }
-  }, [isCalculated]);
+    setExpression((prev) => {
+      if (prev === '0' && text !== '.' && text !== ' ' && !text.match(/[+−×÷]/)) {
+        setCursorPos(text.length);
+        return text;
+      }
+      const c = cursorPos === null ? prev.length : cursorPos;
+      const newExpr = prev.slice(0, c) + text + prev.slice(c);
+      setCursorPos(c + text.length);
+      return newExpr;
+    });
+  }, [cursorPos, isCalculated]);
+
+  const inputDigit = useCallback((digit: string) => {
+    insertText(digit);
+  }, [insertText]);
 
   const inputDot = useCallback(() => {
     if (isCalculated) {
       setExpression('0.');
+      setCursorPos(2);
       setIsCalculated(false);
       return;
     }
-    const segments = expression.split(/[ +−×÷]/);
+    const c = cursorPos === null ? expression.length : cursorPos;
+    const beforeCursor = expression.slice(0, c);
+    const segments = beforeCursor.split(/[ +−×÷]/);
     const lastSegment = segments[segments.length - 1];
     if (!lastSegment.includes('.')) {
-      setExpression(expression + '.');
+      insertText('.');
     }
-  }, [expression, isCalculated]);
+  }, [expression, cursorPos, isCalculated, insertText]);
 
   const handleBackspace = useCallback(() => {
     if (isCalculated) {
       setExpression('0');
+      setCursorPos(null);
       setIsCalculated(false);
       return;
     }
-    if (expression.length > 1) {
-      if (expression.endsWith(' ')) {
-        setExpression(expression.slice(0, -3));
+    setExpression((prev) => {
+      const c = cursorPos === null ? prev.length : cursorPos;
+      if (c === 0) return prev; // nothing to delete
+      
+      // Handle trailing spaces around operators
+      if (prev.charAt(c - 1) === ' ' && c >= 3) {
+        setCursorPos(c - 3);
+        const newExpr = prev.slice(0, c - 3) + prev.slice(c);
+        return newExpr === '' ? '0' : newExpr;
       } else {
-        setExpression(expression.slice(0, -1));
+        setCursorPos(c - 1);
+        const newExpr = prev.slice(0, c - 1) + prev.slice(c);
+        return newExpr === '' ? '0' : newExpr;
       }
-    } else {
-      setExpression('0');
-    }
-  }, [expression, isCalculated]);
+    });
+  }, [cursorPos, isCalculated]);
 
   const handleOperator = useCallback((op: string) => {
-    if (isCalculated) setIsCalculated(false);
-    if (expression.endsWith(' ')) {
-      setExpression(expression.slice(0, -3) + ` ${op} `);
-    } else {
-      setExpression(expression + ` ${op} `);
-    }
-  }, [expression, isCalculated]);
+    insertText(` ${op} `);
+  }, [insertText]);
 
   const handleEquals = useCallback(() => {
     const result = evaluate(expression);
     if (result !== null) {
       setHistory((prev) => [...prev, { expression, result: String(result) }]);
       setExpression(String(result));
+      setCursorPos(String(result).length);
       setIsCalculated(true);
       scrollToBottom();
     }
@@ -108,25 +153,79 @@ export default function Calculator({ open, onClose, initialValue }: CalculatorPr
 
   const handleClear = useCallback(() => {
     setExpression('0');
+    setCursorPos(null);
     setIsCalculated(false);
   }, []);
 
   const handleAllClear = useCallback(() => {
     setExpression('0');
+    setCursorPos(null);
     setHistory([]);
     setIsCalculated(false);
   }, []);
 
   const handlePercent = useCallback(() => {
-    const result = evaluate(expression);
-    if (result !== null) {
-      const percentResult = Math.round((result / 100) * 10000) / 10000;
-      setHistory((prev) => [...prev, { expression: `${expression}%`, result: String(percentResult) }]);
-      setExpression(String(percentResult));
-      setIsCalculated(true);
-      scrollToBottom();
+    if (isCalculated) {
+      const result = evaluate(expression);
+      if (result !== null) {
+        const percentResult = Math.round((result / 100) * 10000) / 10000;
+        setHistory((prev) => [...prev, { expression: `${expression}%`, result: String(percentResult) }]);
+        setExpression(String(percentResult));
+        setCursorPos(null);
+        setIsCalculated(true);
+        scrollToBottom();
+      }
+      return;
     }
-  }, [expression]);
+
+    // Contextual percentage parsing
+    setExpression((prev) => {
+      const c = cursorPos === null ? prev.length : cursorPos;
+      const beforeCursor = prev.slice(0, c);
+      const afterCursor = prev.slice(c);
+
+      const match = beforeCursor.match(/(.*[+−×÷] *|^)([0-9.]+)$/);
+      if (!match) {
+        const baseValue = evaluate(beforeCursor);
+        if (baseValue !== null) {
+           const percentVal = baseValue / 100;
+           setCursorPos(String(percentVal).length);
+           return String(percentVal) + afterCursor;
+        }
+        return prev;
+      }
+
+      const precedingExpr = match[1].trim();
+      const lastNumberStr = match[2];
+      const lastNumber = parseFloat(lastNumberStr);
+
+      if (!precedingExpr) {
+        const percentVal = lastNumber / 100;
+        const newStr = String(percentVal);
+        setCursorPos(newStr.length);
+        return newStr + afterCursor;
+      } else {
+        const operator = precedingExpr.slice(-1);
+        const baseExpr = precedingExpr.slice(0, -1).trim();
+
+        const baseValue = evaluate(baseExpr);
+        if (baseValue !== null) {
+          let percentVal = 0;
+          if (operator === '+' || operator === '−') {
+            percentVal = baseValue * (lastNumber / 100);
+          } else {
+            percentVal = lastNumber / 100;
+          }
+          
+          percentVal = Math.round(percentVal * 10000) / 10000;
+          const newExpr = `${baseExpr} ${operator} ${percentVal}`;
+          setCursorPos(newExpr.length);
+          return newExpr + afterCursor;
+        }
+      }
+      return prev;
+    });
+  }, [cursorPos, isCalculated, expression]);
 
   // Tap a history result to reuse it
   const reuseResult = useCallback((result: string) => {
@@ -209,7 +308,23 @@ export default function Calculator({ open, onClose, initialValue }: CalculatorPr
         {/* Handle + close */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Máy tính</span>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            {/* Cursor Navigation */}
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button 
+                onClick={() => moveCursor(-1)} 
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: 4, padding: '4px 8px', cursor: 'pointer' }}
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <button 
+                onClick={() => moveCursor(1)} 
+                style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', borderRadius: 4, padding: '4px 8px', cursor: 'pointer' }}
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+            
             {history.length > 0 && (
               <button
                 onClick={handleAllClear}
@@ -283,7 +398,15 @@ export default function Calculator({ open, onClose, initialValue }: CalculatorPr
               wordBreak: 'break-all',
               lineHeight: 1.3,
             }}>
-              {expression}
+              {expression.slice(0, cursorPos === null ? expression.length : cursorPos)}
+              {!isCalculated && (
+                <span style={{ 
+                  borderRight: '2px solid var(--gold)', 
+                  marginRight: '-2px',
+                  animation: 'blink 1s step-end infinite' 
+                }} />
+              )}
+              {expression.slice(cursorPos === null ? expression.length : cursorPos)}
             </div>
             {/* Live preview */}
             {!isCalculated && liveResult !== null && String(liveResult) !== expression && (
@@ -307,7 +430,9 @@ export default function Calculator({ open, onClose, initialValue }: CalculatorPr
           gridTemplateColumns: 'repeat(4, 1fr)',
           gap: 8,
         }}>
-          <button style={fnBtn} onClick={handleClear}>C</button>
+          <button style={{...fnBtn, color: expression === '0' ? '#ef4444' : fnBtn.color}} onClick={expression === '0' ? handleAllClear : handleClear}>
+            {expression === '0' ? 'AC' : 'C'}
+          </button>
           <button style={fnBtn} onClick={() => inputDigit('(')}>(</button>
           <button style={fnBtn} onClick={() => inputDigit(')')}>)</button>
           <button style={fnBtn} onClick={handleBackspace}><Delete size={18} /></button>
