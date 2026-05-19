@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import puppeteerCore from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
 
+// Vercel serverless config: Puppeteer needs more time than the default 10s
+export const maxDuration = 60;
+export const dynamic = 'force-dynamic';
+
 // Detect if running on Vercel (serverless) or locally
 const IS_VERCEL = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME;
 
