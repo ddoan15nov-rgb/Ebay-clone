@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="gold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#e8d48b"/>
+      <stop offset="50%" style="stop-color:#c9a84c"/>
+      <stop offset="100%" style="stop-color:#a68a3a"/>
+    </linearGradient>
+    <linearGradient id="goldLight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f0e6b8"/>
+      <stop offset="100%" style="stop-color:#c9a84c"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="108" fill="#0a0a0a"/>
+  <!-- Gold bar - front face -->
+  <polygon points="160,300 256,340 352,300 256,260" fill="url(#gold)"/>
+  <!-- Gold bar - top face -->
+  <polygon points="180,220 276,260 352,220 256,180" fill="url(#goldLight)"/>
+  <!-- Gold bar - right face -->
+  <polygon points="276,260 352,220 352,300 276,340" fill="#a68a3a"/>
+  <!-- Gold bar - left face -->
+  <polygon points="180,220 256,260 256,340 160,300" fill="#c9a84c" opacity="0.8"/>
+  <!-- Sparkles -->
+  <circle cx="140" cy="180" r="3" fill="#c9a84c" opacity="0.6"/>
+  <circle cx="380" cy="200" r="2.5" fill="#c9a84c" opacity="0.5"/>
+  <circle cx="350" cy="160" r="2" fill="#e8d48b" opacity="0.7"/>
+  <circle cx="170" cy="330" r="2" fill="#c9a84c" opacity="0.4"/>
+  <!-- Star sparkles -->
+  <path d="M390 280 L392 274 L394 280 L400 282 L394 284 L392 290 L390 284 L384 282Z" fill="#e8d48b" opacity="0.6"/>
+  <path d="M130 240 L131.5 235 L133 240 L138 241.5 L133 243 L131.5 248 L130 243 L125 241.5Z" fill="#e8d48b" opacity="0.5"/>
+  <path d="M310 150 L311 146 L312 150 L316 151 L312 152 L311 156 L310 152 L306 151Z" fill="#e8d48b" opacity="0.7"/>
+</svg>
