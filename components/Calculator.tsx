@@ -121,7 +121,7 @@ export default function Calculator({ open, onClose, initialValue }: CalculatorPr
     const result = evaluate(expression);
     if (result !== null) {
       const percentResult = Math.round((result / 100) * 10000) / 10000;
-      setHistory((prev) => [...prev, { expression: `(${expression})%`, result: String(percentResult) }]);
+      setHistory((prev) => [...prev, { expression: `${expression}%`, result: String(percentResult) }]);
       setExpression(String(percentResult));
       setIsCalculated(true);
       scrollToBottom();
@@ -308,28 +308,31 @@ export default function Calculator({ open, onClose, initialValue }: CalculatorPr
           gap: 8,
         }}>
           <button style={fnBtn} onClick={handleClear}>C</button>
-          <button style={fnBtn} onClick={handlePercent}>%</button>
+          <button style={fnBtn} onClick={() => inputDigit('(')}>(</button>
+          <button style={fnBtn} onClick={() => inputDigit(')')}>)</button>
           <button style={fnBtn} onClick={handleBackspace}><Delete size={18} /></button>
-          <button style={opBtn} onClick={() => handleOperator('÷')}>÷</button>
 
           <button style={numBtn} onClick={() => inputDigit('7')}>7</button>
           <button style={numBtn} onClick={() => inputDigit('8')}>8</button>
           <button style={numBtn} onClick={() => inputDigit('9')}>9</button>
-          <button style={opBtn} onClick={() => handleOperator('×')}>×</button>
+          <button style={opBtn} onClick={() => handleOperator('÷')}>÷</button>
 
           <button style={numBtn} onClick={() => inputDigit('4')}>4</button>
           <button style={numBtn} onClick={() => inputDigit('5')}>5</button>
           <button style={numBtn} onClick={() => inputDigit('6')}>6</button>
-          <button style={opBtn} onClick={() => handleOperator('−')}>−</button>
+          <button style={opBtn} onClick={() => handleOperator('×')}>×</button>
 
           <button style={numBtn} onClick={() => inputDigit('1')}>1</button>
           <button style={numBtn} onClick={() => inputDigit('2')}>2</button>
           <button style={numBtn} onClick={() => inputDigit('3')}>3</button>
+          <button style={opBtn} onClick={() => handleOperator('−')}>−</button>
+
+          <button style={numBtn} onClick={() => inputDigit('0')}>0</button>
+          <button style={numBtn} onClick={inputDot}>.</button>
+          <button style={fnBtn} onClick={handlePercent}>%</button>
           <button style={opBtn} onClick={() => handleOperator('+')}>+</button>
 
-          <button style={{ ...numBtn, gridColumn: 'span 2' }} onClick={() => inputDigit('0')}>0</button>
-          <button style={numBtn} onClick={inputDot}>.</button>
-          <button style={eqBtn} onClick={handleEquals}>=</button>
+          <button style={{ ...eqBtn, gridColumn: 'span 4' }} onClick={handleEquals}>=</button>
         </div>
       </div>
     </>

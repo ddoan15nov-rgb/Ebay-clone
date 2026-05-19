@@ -548,6 +548,7 @@ function ItemTimer({ endTime, listingType }: { endTime: string; listingType: str
 
 // ──── Zoomable Image Viewer ────
 // Supports: pinch-to-zoom, pan when zoomed, swipe when not zoomed, double-tap
+// Supports: pinch-to-zoom, pan when zoomed, swipe when not zoomed, double-tap
 function ZoomableImageViewer({
   images,
   activeIndex,
@@ -656,13 +657,15 @@ function ZoomableImageViewer({
     if (e.touches.length === 2 && g.type === 'pinch') {
       e.preventDefault();
       const newDist = getTouchDistance(e.touches);
-      const newScale = Math.min(5, Math.max(1, g.startScale * (newDist / g.startDist)));
+      const distRatio = newDist / g.startDist;
+      // Dampen the zoom ratio so it feels smoother and less sensitive
+      const dampedRatio = 1 + (distRatio - 1) * 0.7; 
+      const newScale = Math.min(5, Math.max(1, g.startScale * dampedRatio));
       setScale(newScale);
+      
+      // Reset translate if zoomed all the way out
       if (newScale <= 1.05) {
         setTranslate({ x: 0, y: 0 });
-      } else {
-        // Re-clamp existing translate for new scale
-        setTranslate((prev) => clampTranslate(prev.x, prev.y, newScale));
       }
       g.moved = true;
       return;
@@ -673,6 +676,7 @@ function ZoomableImageViewer({
     const dx = e.touches[0].clientX - g.startX;
     const dy = e.touches[0].clientY - g.startY;
     const absDx = Math.abs(dx);
+    const absDy = Math.abs(dy);
 
     if (scale > 1.05) {
       e.preventDefault();
@@ -680,7 +684,7 @@ function ZoomableImageViewer({
       const raw = { x: g.startTranslate.x + dx, y: g.startTranslate.y + dy };
       setTranslate(clampTranslate(raw.x, raw.y, scale));
       g.moved = true;
-    } else if (g.type !== 'swipe' && absDx > 15) {
+    } else if (g.type !== 'swipe' && (absDx > 15 || absDy > 15)) {
       g.type = 'swipe';
       g.moved = true;
     }
@@ -710,10 +714,15 @@ function ZoomableImageViewer({
       }
     }
 
-    // Swipe to change image (only when not zoomed)
+    // Swipe to change image or swipe down to close
     if (g.type === 'swipe' && scale <= 1.05 && e.changedTouches.length === 1) {
       const dx = e.changedTouches[0].clientX - g.startX;
-      if (Math.abs(dx) > 50) {
+      const dy = e.changedTouches[0].clientY - g.startY;
+      
+      if (dy > 80 && Math.abs(dy) > Math.abs(dx)) {
+        // Swipe down to close
+        onClose();
+      } else if (Math.abs(dx) > 50) {
         if (dx < 0 && activeIndex < images.length - 1) {
           onChangeIndex(activeIndex + 1);
         } else if (dx > 0 && activeIndex > 0) {
@@ -722,10 +731,13 @@ function ZoomableImageViewer({
       }
     }
 
-    // Snap back to 1x if close
+    // Snap back to 1x if close, or re-clamp after pinching
     if (g.type === 'pinch' && scale < 1.05) {
       setScale(1);
       setTranslate({ x: 0, y: 0 });
+    } else if (g.type === 'pinch') {
+      // Re-clamp in case the user pinched off-center
+      setTranslate((prev) => clampTranslate(prev.x, prev.y, scale));
     }
 
     g.type = 'none';
@@ -744,6 +756,59 @@ function ZoomableImageViewer({
       <button className="image-viewer-close" onClick={onClose}>
         <X size={18} />
       </button>
+
+      {/* Navigation Buttons */}
+      {images.length > 1 && activeIndex > 0 && (
+        <button 
+          className="image-viewer-nav"
+          onClick={(e) => { e.stopPropagation(); onChangeIndex(activeIndex - 1); }}
+          style={{
+            position: 'absolute',
+            left: 16,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            background: 'rgba(0,0,0,0.5)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '50%',
+            width: 44,
+            height: 44,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 302,
+            cursor: 'pointer'
+          }}
+        >
+          <ChevronLeft size={28} />
+        </button>
+      )}
+
+      {images.length > 1 && activeIndex < images.length - 1 && (
+        <button 
+          className="image-viewer-nav"
+          onClick={(e) => { e.stopPropagation(); onChangeIndex(activeIndex + 1); }}
+          style={{
+            position: 'absolute',
+            right: 16,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            background: 'rgba(0,0,0,0.5)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '50%',
+            width: 44,
+            height: 44,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 302,
+            cursor: 'pointer'
+          }}
+        >
+          <ChevronRight size={28} />
+        </button>
+      )}
 
       {/* Image counter */}
       {images.length > 1 && (
