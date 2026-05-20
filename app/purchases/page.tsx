@@ -16,9 +16,11 @@ export default function PurchasesPage() {
   const [items, setItems] = useState<PurchaseEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [warehouseSelections, setWarehouseSelections] = useState<Record<string, string>>({});
+  const [updatingWh, setUpdatingWh] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
-    const fetchPurchases = async () => {
+    const fetchPurchasesAndWarehouse = async () => {
       try {
         const res = await fetch('/api/ebay/purchases');
         const data = await res.json();
@@ -33,6 +35,22 @@ export default function PurchasesPage() {
         } else {
           setError(data.error || 'Failed to load');
         }
+
+        // Fetch warehouse configurations from snipes sync API
+        const syncRes = await fetch('/api/sync/snipes');
+        if (syncRes.ok) {
+          const syncData = await syncRes.json();
+          if (syncData.snipes) {
+            const whMap: Record<string, string> = {};
+            syncData.snipes.forEach((s: any) => {
+              if (s.itemId.startsWith('wh_')) {
+                const ebayId = s.itemId.replace('wh_', '');
+                whMap[ebayId] = String(s.maxBid);
+              }
+            });
+            setWarehouseSelections(whMap);
+          }
+        }
       } catch (err) {
         console.error('Failed to fetch purchases', err);
         setError('Không thể kết nối');
@@ -41,8 +59,32 @@ export default function PurchasesPage() {
       }
     };
 
-    fetchPurchases();
+    fetchPurchasesAndWarehouse();
   }, []);
+
+  const handleUpdateWarehouse = async (ebayItemId: string, warehouseId: string, itemTitle: string) => {
+    setUpdatingWh(prev => ({ ...prev, [ebayItemId]: true }));
+    try {
+      const res = await fetch('/api/sync/snipes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itemId: `wh_${ebayItemId}`,
+          maxBid: parseInt(warehouseId),
+          itemTitle: `Warehouse setting for ${itemTitle}`,
+        }),
+      });
+      if (res.ok) {
+        setWarehouseSelections(prev => ({ ...prev, [ebayItemId]: warehouseId }));
+      } else {
+        alert('Lỗi cập nhật kho lưu trữ đám mây');
+      }
+    } catch {
+      alert('Không thể kết nối đến máy chủ sync');
+    } finally {
+      setUpdatingWh(prev => ({ ...prev, [ebayItemId]: false }));
+    }
+  };
 
   if (loading) {
     return (
@@ -194,9 +236,88 @@ export default function PurchasesPage() {
                     )}
                   </div>
 
+                  {/* Warehouse Selection Row */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      marginTop: 10,
+                      marginBottom: 4,
+                      padding: '6px 8px',
+                      background: 'rgba(255, 255, 255, 0.01)',
+                      border: '1px dashed var(--border)',
+                      borderRadius: 6,
+                    }}
+                  >
+                    <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+                      Kho nhận:
+                    </span>
+                    <select
+                      value={warehouseSelections[entry.ebayItemId || ''] || '8'}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setWarehouseSelections(prev => ({ ...prev, [entry.ebayItemId || '']: val }));
+                      }}
+                      style={{
+                        padding: '2px 6px',
+                        fontSize: '0.7rem',
+                        background: 'var(--surface)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 4,
+                        color: 'var(--text-muted)',
+                      }}
+                    >
+                      <option value="8">Oregon (Mỹ)</option>
+                      <option value="13">Cali (Mỹ)</option>
+                      <option value="11">Frankfurt (Đức)</option>
+                      <option value="18">Langen (Đức)</option>
+                      <option value="7">Hàn Quốc</option>
+                      <option value="5">Úc</option>
+                      <option value="4">Anh</option>
+                      <option value="2">Nhật</option>
+                      <option value="17">Trung Quốc</option>
+                      <option value="19">Thái Lan</option>
+                    </select>
+
+                    <button
+                      onClick={() => handleUpdateWarehouse(
+                        entry.ebayItemId || '',
+                        warehouseSelections[entry.ebayItemId || ''] || '8',
+                        entry.title
+                      )}
+                      disabled={updatingWh[entry.ebayItemId || '']}
+                      className="btn"
+                      style={{
+                        padding: '2px 8px',
+                        fontSize: '0.65rem',
+                        background: 'rgba(212, 175, 55, 0.15)',
+                        color: 'var(--gold)',
+                        border: '1px solid rgba(212, 175, 55, 0.3)',
+                        borderRadius: 4,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        height: 22,
+                        minHeight: 22,
+                        boxSizing: 'border-box',
+                      }}
+                    >
+                      {updatingWh[entry.ebayItemId || ''] ? (
+                        <div className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} />
+                      ) : (
+                        <span>Cập nhật</span>
+                      )}
+                    </button>
+                  </div>
+
                   {/* Giaonhan247 Sync Widget */}
                   {entry.trackingNumber && (
-                    <GiaonhanSyncWidget entry={entry} />
+                    <GiaonhanSyncWidget 
+                      entry={entry} 
+                      defaultWarehouse={warehouseSelections[entry.ebayItemId || '']} 
+                    />
                   )}
                 </div>
 

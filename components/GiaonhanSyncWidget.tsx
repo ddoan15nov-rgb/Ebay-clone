@@ -6,6 +6,7 @@ import { PurchaseEntry } from '@/lib/types';
 
 interface GiaonhanSyncWidgetProps {
   entry: PurchaseEntry;
+  defaultWarehouse?: string;
 }
 
 const ROUTE_OPTIONS = [
@@ -21,14 +22,20 @@ const ROUTE_OPTIONS = [
   { value: '19', label: 'Thái Lan' },
 ];
 
-export default function GiaonhanSyncWidget({ entry }: GiaonhanSyncWidgetProps) {
-  const [tuyen, setTuyen] = useState('8');
+export default function GiaonhanSyncWidget({ entry, defaultWarehouse }: GiaonhanSyncWidgetProps) {
+  const [tuyen, setTuyen] = useState(defaultWarehouse || '8');
   const [gia, setGia] = useState((entry.tong || entry.gia || 0).toFixed(2));
   const [isBlock, setIsBlock] = useState((entry.tong || entry.gia || 0) >= 1500);
   const [status, setStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [isSynced, setIsSynced] = useState(false);
   const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    if (defaultWarehouse) {
+      setTuyen(defaultWarehouse);
+    }
+  }, [defaultWarehouse]);
 
   useEffect(() => {
     if (typeof window !== 'undefined' && entry.trackingNumber) {
