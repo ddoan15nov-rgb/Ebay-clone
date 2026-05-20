@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { ShoppingCart, PackageCheck, Truck, ExternalLink, Package, CreditCard, Clock } from 'lucide-react';
 import { PurchaseEntry } from '@/lib/types';
+import GiaonhanSyncWidget from '@/components/GiaonhanSyncWidget';
 
 const STATUS_CONFIG = {
   pending: { label: 'Chờ thanh toán', icon: Clock, bg: 'rgba(241,196,15,0.12)', color: '#f1c40f', border: 'rgba(241,196,15,0.25)' },
@@ -192,6 +193,11 @@ export default function PurchasesPage() {
                       </span>
                     )}
                   </div>
+
+                  {/* Giaonhan247 Sync Widget */}
+                  {entry.trackingNumber && (
+                    <GiaonhanSyncWidget entry={entry} />
+                  )}
                 </div>
 
                 {/* External link */}
