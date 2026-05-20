@@ -28,7 +28,7 @@ export default function GiaonhanSyncWidget({ entry, defaultWarehouse }: Giaonhan
   const [isBlock, setIsBlock] = useState((entry.tong || entry.gia || 0) >= 1500);
   const [status, setStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
-  const [isSynced, setIsSynced] = useState(false);
+  const [isSynced, setIsSynced] = useState(entry.isSynced || false);
   const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
@@ -38,13 +38,17 @@ export default function GiaonhanSyncWidget({ entry, defaultWarehouse }: Giaonhan
   }, [defaultWarehouse]);
 
   useEffect(() => {
+    if (entry.isSynced) {
+      setIsSynced(true);
+      return;
+    }
     if (typeof window !== 'undefined' && entry.trackingNumber) {
       const synced = localStorage.getItem(`gn247_synced_${entry.trackingNumber}`);
       if (synced) {
         setIsSynced(true);
       }
     }
-  }, [entry.trackingNumber]);
+  }, [entry.trackingNumber, entry.isSynced]);
 
   // Update block status if user changes price manually
   const handlePriceChange = (val: string) => {

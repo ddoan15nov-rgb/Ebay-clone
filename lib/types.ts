@@ -56,6 +56,7 @@ export interface PurchaseEntry {
   lo: string;       // Batch label
   ebayItemId?: string; // Link to original eBay item
   createdAt: string;
+  isSynced?: boolean; // Giaonhan247 sync status
 }
 
 // Filter state

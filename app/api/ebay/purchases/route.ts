@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { XMLParser } from 'fast-xml-parser';
+import { supabase } from '@/lib/supabase';
+import { getEbayUsername } from '@/lib/user-identity';
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
@@ -345,9 +347,36 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    // Fetch giaonhan_sync activity logs for this user to check sync status
+    const syncedTrackings = new Set<string>();
+    try {
+      const userId = await getEbayUsername();
+      if (userId) {
+        const { data, error } = await supabase
+          .from('activity_log')
+          .select('target')
+          .eq('user_id', userId)
+          .eq('action', 'giaonhan_sync');
+        if (data && !error) {
+          data.forEach(row => {
+            if (row.target) {
+              syncedTrackings.add(String(row.target).trim());
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.error('[Purchases] Failed to fetch activity logs:', e);
+    }
+
     const finalItems = Array.from(mergedMap.values()).concat(noTrackingItems);
-    // Clean up internal fields
+    // Clean up internal fields and assign isSynced
     finalItems.forEach(item => {
+      if (item.trackingNumber && syncedTrackings.has(String(item.trackingNumber).trim())) {
+        item.isSynced = true;
+      } else {
+        item.isSynced = false;
+      }
       delete item.mergedTitles;
       delete item.originalTitle;
     });

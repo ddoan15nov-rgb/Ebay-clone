@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import puppeteerCore from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+import { supabase } from '@/lib/supabase';
+import { getEbayUsername } from '@/lib/user-identity';
 
 export const maxDuration = 60;
 export const dynamic = 'force-dynamic';
@@ -232,6 +234,28 @@ export async function POST(request: NextRequest) {
       imageUrl,
       note,
     });
+
+    if (result.success) {
+      try {
+        const userId = await getEbayUsername();
+        if (userId) {
+          await supabase.from('activity_log').insert({
+            user_id: userId,
+            action: 'giaonhan_sync',
+            target: trackingNumber,
+            target_label: note || trackingNumber,
+            metadata: {
+              success: true,
+              tuyen: tuyen || '8',
+              gia: gia || 0,
+              isBlock: !!isBlock,
+            },
+          });
+        }
+      } catch (logErr) {
+        console.error('Failed to log tracking sync to database:', logErr);
+      }
+    }
 
     return NextResponse.json(result);
   } catch (error) {
