@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
       ignoreAttributes: false,
       parseAttributeValue: true,
       textNodeName: '_text',
+      parseTagValue: false,
     });
     
     const result = parser.parse(xmlResponse);

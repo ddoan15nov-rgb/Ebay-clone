@@ -39,6 +39,15 @@ export async function GET(request: NextRequest) {
     });
 
     const xmlResponse = await res.text();
+    
+    // Write raw response to file for debugging tracking number structure
+    try {
+      const fs = require('fs');
+      fs.writeFileSync('/Users/dudoan/Documents/Unnamed/gold-scrap-pwa/ebay-buying-response.xml', xmlResponse);
+      console.log('[Purchases Debug] Successfully wrote ebay-buying-response.xml');
+    } catch (e) {
+      console.error('[Purchases Debug] Failed to write debug xml file:', e);
+    }
 
     if (!res.ok) {
       return NextResponse.json({ error: 'eBay API error' }, { status: res.status });
@@ -48,6 +57,7 @@ export async function GET(request: NextRequest) {
       ignoreAttributes: false,
       parseAttributeValue: true,
       textNodeName: '_text',
+      parseTagValue: false,
     });
 
     const result = parser.parse(xmlResponse);
@@ -152,6 +162,12 @@ export async function GET(request: NextRequest) {
         trackingDetails = o.ShippingDetails.ShipmentTrackingDetails;
       }
       const trackingInfo = Array.isArray(trackingDetails) ? trackingDetails[0] : trackingDetails;
+
+      if (trackingDetails) {
+        console.log('[Purchases Debug] Found trackingDetails for item:', item.Title);
+        console.log('[Purchases Debug] trackingDetails raw:', JSON.stringify(trackingDetails));
+        console.log('[Purchases Debug] trackingInfo raw:', JSON.stringify(trackingInfo));
+      }
 
       // === Status extraction ===
       const paidTime = t.PaidTime || o?.PaidTime || '';
