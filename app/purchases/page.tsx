@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { ShoppingCart, PackageCheck, Truck, ExternalLink, Package, CreditCard, Clock } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { ShoppingCart, PackageCheck, Truck, ExternalLink, Package, CreditCard, Clock, Warehouse, CheckCircle, AlertTriangle, X, RefreshCw } from 'lucide-react';
 import { PurchaseEntry } from '@/lib/types';
 import GiaonhanSyncWidget from '@/components/GiaonhanSyncWidget';
 
@@ -12,12 +12,47 @@ const STATUS_CONFIG = {
   delivered: { label: 'Đã nhận', icon: PackageCheck, bg: 'rgba(46,204,113,0.2)', color: '#27ae60', border: 'rgba(46,204,113,0.35)' },
 } as const;
 
+const WAREHOUSE_OPTIONS = [
+  { value: '8', label: 'Oregon (Mỹ)', flag: '🇺🇸' },
+  { value: '13', label: 'Cali (Mỹ)', flag: '🇺🇸' },
+  { value: '11', label: 'Frankfurt (Đức)', flag: '🇩🇪' },
+  { value: '18', label: 'Langen (Đức)', flag: '🇩🇪' },
+  { value: '7', label: 'Hàn Quốc', flag: '🇰🇷' },
+  { value: '5', label: 'Úc', flag: '🇦🇺' },
+  { value: '4', label: 'Anh', flag: '🇬🇧' },
+  { value: '2', label: 'Nhật', flag: '🇯🇵' },
+  { value: '17', label: 'Trung Quốc', flag: '🇨🇳' },
+  { value: '19', label: 'Thái Lan', flag: '🇹🇭' },
+];
+
+interface Toast {
+  id: number;
+  type: 'success' | 'error';
+  message: string;
+}
+
 export default function PurchasesPage() {
   const [items, setItems] = useState<PurchaseEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [warehouseSelections, setWarehouseSelections] = useState<Record<string, string>>({});
   const [updatingWh, setUpdatingWh] = useState<Record<string, boolean>>({});
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const [toastId, setToastId] = useState(0);
+
+  const addToast = useCallback((type: 'success' | 'error', message: string) => {
+    const id = toastId + 1;
+    setToastId(id);
+    setToasts(prev => [...prev, { id, type, message }]);
+    // Auto-dismiss after 4s
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  }, [toastId]);
+
+  const dismissToast = useCallback((id: number) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
 
   useEffect(() => {
     const fetchPurchasesAndWarehouse = async () => {
@@ -62,6 +97,11 @@ export default function PurchasesPage() {
     fetchPurchasesAndWarehouse();
   }, []);
 
+  const getWarehouseLabel = (id: string) => {
+    const wh = WAREHOUSE_OPTIONS.find(w => w.value === id);
+    return wh ? `${wh.flag} ${wh.label}` : `Kho #${id}`;
+  };
+
   const handleUpdateWarehouse = async (ebayItemId: string, warehouseId: string, itemTitle: string) => {
     setUpdatingWh(prev => ({ ...prev, [ebayItemId]: true }));
     try {
@@ -76,11 +116,12 @@ export default function PurchasesPage() {
       });
       if (res.ok) {
         setWarehouseSelections(prev => ({ ...prev, [ebayItemId]: warehouseId }));
+        addToast('success', `✅ Đã cập nhật kho → ${getWarehouseLabel(warehouseId)}`);
       } else {
-        alert('Lỗi cập nhật kho lưu trữ đám mây');
+        addToast('error', '❌ Lỗi cập nhật kho nhận — vui lòng thử lại');
       }
     } catch {
-      alert('Không thể kết nối đến máy chủ sync');
+      addToast('error', '❌ Không thể kết nối đến máy chủ sync');
     } finally {
       setUpdatingWh(prev => ({ ...prev, [ebayItemId]: false }));
     }
@@ -96,6 +137,66 @@ export default function PurchasesPage() {
 
   return (
     <div className="page-container page-transition">
+      {/* Toast notifications */}
+      <div style={{
+        position: 'fixed',
+        top: 16,
+        right: 16,
+        zIndex: 9999,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 8,
+        maxWidth: 360,
+        pointerEvents: 'none',
+      }}>
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            style={{
+              pointerEvents: 'auto',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '10px 14px',
+              borderRadius: 10,
+              background: toast.type === 'success'
+                ? 'linear-gradient(135deg, rgba(46,204,113,0.15), rgba(46,204,113,0.08))'
+                : 'linear-gradient(135deg, rgba(231,76,60,0.15), rgba(231,76,60,0.08))',
+              border: toast.type === 'success'
+                ? '1px solid rgba(46,204,113,0.3)'
+                : '1px solid rgba(231,76,60,0.3)',
+              backdropFilter: 'blur(16px)',
+              WebkitBackdropFilter: 'blur(16px)',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
+              animation: 'slideInRight 0.3s ease-out',
+              color: toast.type === 'success' ? '#2ecc71' : '#e74c3c',
+              fontSize: '0.78rem',
+              fontWeight: 500,
+            }}
+          >
+            {toast.type === 'success'
+              ? <CheckCircle size={16} style={{ flexShrink: 0 }} />
+              : <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+            }
+            <span style={{ flex: 1 }}>{toast.message}</span>
+            <button
+              onClick={() => dismissToast(toast.id)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'inherit',
+                cursor: 'pointer',
+                padding: 2,
+                flexShrink: 0,
+                opacity: 0.6,
+              }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+
       <h1 className="page-title" style={{ marginBottom: 4 }}>
         <ShoppingCart
           size={22}
@@ -135,6 +236,7 @@ export default function PurchasesPage() {
           {items.map((entry) => {
             const statusConf = STATUS_CONFIG[entry.status] || STATUS_CONFIG.pending;
             const StatusIcon = statusConf.icon;
+            const itemId = entry.ebayItemId || '';
 
             return (
               <div
@@ -202,7 +304,7 @@ export default function PurchasesPage() {
                   </div>
 
                   {/* Status badge */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 6 }}>
                     <span
                       style={{
                         display: 'inline-flex',
@@ -220,18 +322,51 @@ export default function PurchasesPage() {
                       <StatusIcon size={11} /> {statusConf.label}
                     </span>
 
-                    {/* Tracking info if shipped */}
+                    {/* Carrier badge */}
                     {entry.tracked && entry.carrier && (
                       <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3 }}>
                         <Package size={10} /> {entry.carrier}
                       </span>
                     )}
-                    {entry.tracked && entry.trackingNumber && (
+                  </div>
+
+                  {/* Tracking Number Row — always visible */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '5px 8px',
+                    borderRadius: 6,
+                    background: entry.trackingNumber
+                      ? 'rgba(46, 204, 113, 0.06)'
+                      : 'rgba(241, 196, 15, 0.06)',
+                    border: entry.trackingNumber
+                      ? '1px solid rgba(46, 204, 113, 0.15)'
+                      : '1px solid rgba(241, 196, 15, 0.15)',
+                    marginBottom: 8,
+                  }}>
+                    <Package size={12} style={{
+                      flexShrink: 0,
+                      color: entry.trackingNumber ? 'var(--success)' : 'var(--gold)',
+                      opacity: 0.7,
+                    }} />
+                    {entry.trackingNumber ? (
                       <span style={{
-                        fontSize: '0.58rem', fontFamily: 'monospace',
-                        color: 'var(--text-muted)', letterSpacing: '0.02em',
+                        fontSize: '0.68rem',
+                        fontFamily: 'monospace',
+                        color: 'var(--text-muted)',
+                        letterSpacing: '0.03em',
+                        wordBreak: 'break-all',
                       }}>
                         {entry.trackingNumber}
+                      </span>
+                    ) : (
+                      <span style={{
+                        fontSize: '0.68rem',
+                        color: 'var(--text-dim)',
+                        fontStyle: 'italic',
+                      }}>
+                        Chưa có tracking number
                       </span>
                     )}
                   </div>
@@ -242,81 +377,97 @@ export default function PurchasesPage() {
                       display: 'flex',
                       alignItems: 'center',
                       gap: 8,
-                      marginTop: 10,
                       marginBottom: 4,
                       padding: '6px 8px',
-                      background: 'rgba(255, 255, 255, 0.01)',
-                      border: '1px dashed var(--border)',
-                      borderRadius: 6,
+                      background: 'rgba(212, 175, 55, 0.03)',
+                      border: '1px solid rgba(212, 175, 55, 0.1)',
+                      borderRadius: 8,
                     }}
                   >
-                    <span style={{ fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                      Kho nhận:
-                    </span>
+                    <Warehouse size={13} style={{ color: 'var(--gold)', opacity: 0.7, flexShrink: 0 }} />
                     <select
-                      value={warehouseSelections[entry.ebayItemId || ''] || '8'}
+                      value={warehouseSelections[itemId] || '8'}
                       onChange={(e) => {
                         const val = e.target.value;
-                        setWarehouseSelections(prev => ({ ...prev, [entry.ebayItemId || '']: val }));
+                        setWarehouseSelections(prev => ({ ...prev, [itemId]: val }));
                       }}
                       style={{
-                        padding: '2px 6px',
+                        flex: 1,
+                        padding: '3px 6px',
                         fontSize: '0.7rem',
                         background: 'var(--surface)',
                         border: '1px solid var(--border)',
-                        borderRadius: 4,
+                        borderRadius: 6,
                         color: 'var(--text-muted)',
+                        cursor: 'pointer',
                       }}
                     >
-                      <option value="8">Oregon (Mỹ)</option>
-                      <option value="13">Cali (Mỹ)</option>
-                      <option value="11">Frankfurt (Đức)</option>
-                      <option value="18">Langen (Đức)</option>
-                      <option value="7">Hàn Quốc</option>
-                      <option value="5">Úc</option>
-                      <option value="4">Anh</option>
-                      <option value="2">Nhật</option>
-                      <option value="17">Trung Quốc</option>
-                      <option value="19">Thái Lan</option>
+                      {WAREHOUSE_OPTIONS.map(opt => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.flag} {opt.label}
+                        </option>
+                      ))}
                     </select>
 
                     <button
                       onClick={() => handleUpdateWarehouse(
-                        entry.ebayItemId || '',
-                        warehouseSelections[entry.ebayItemId || ''] || '8',
+                        itemId,
+                        warehouseSelections[itemId] || '8',
                         entry.title
                       )}
-                      disabled={updatingWh[entry.ebayItemId || '']}
-                      className="btn"
+                      disabled={updatingWh[itemId]}
                       style={{
-                        padding: '2px 8px',
-                        fontSize: '0.65rem',
-                        background: 'rgba(212, 175, 55, 0.15)',
+                        padding: '4px 12px',
+                        fontSize: '0.68rem',
+                        fontWeight: 600,
+                        background: updatingWh[itemId]
+                          ? 'rgba(212, 175, 55, 0.08)'
+                          : 'linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(212, 175, 55, 0.1))',
                         color: 'var(--gold)',
                         border: '1px solid rgba(212, 175, 55, 0.3)',
-                        borderRadius: 4,
-                        cursor: 'pointer',
+                        borderRadius: 6,
+                        cursor: updatingWh[itemId] ? 'wait' : 'pointer',
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: 4,
-                        height: 22,
-                        minHeight: 22,
-                        boxSizing: 'border-box',
+                        justifyContent: 'center',
+                        gap: 5,
+                        minWidth: 75,
+                        height: 26,
+                        transition: 'all 0.2s ease',
+                        boxShadow: updatingWh[itemId]
+                          ? 'none'
+                          : '0 1px 4px rgba(212, 175, 55, 0.15)',
+                        whiteSpace: 'nowrap',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!updatingWh[itemId]) {
+                          e.currentTarget.style.background = 'linear-gradient(135deg, rgba(212, 175, 55, 0.35), rgba(212, 175, 55, 0.2))';
+                          e.currentTarget.style.boxShadow = '0 2px 8px rgba(212, 175, 55, 0.25)';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!updatingWh[itemId]) {
+                          e.currentTarget.style.background = 'linear-gradient(135deg, rgba(212, 175, 55, 0.2), rgba(212, 175, 55, 0.1))';
+                          e.currentTarget.style.boxShadow = '0 1px 4px rgba(212, 175, 55, 0.15)';
+                        }
                       }}
                     >
-                      {updatingWh[entry.ebayItemId || ''] ? (
-                        <div className="spinner" style={{ width: 10, height: 10, borderWidth: 1.5 }} />
+                      {updatingWh[itemId] ? (
+                        <RefreshCw size={12} className="spinner" />
                       ) : (
-                        <span>Cập nhật</span>
+                        <>
+                          <RefreshCw size={11} />
+                          Cập nhật
+                        </>
                       )}
                     </button>
                   </div>
 
                   {/* Giaonhan247 Sync Widget */}
                   {entry.trackingNumber && (
-                    <GiaonhanSyncWidget 
-                      entry={entry} 
-                      defaultWarehouse={warehouseSelections[entry.ebayItemId || '']} 
+                    <GiaonhanSyncWidget
+                      entry={entry}
+                      defaultWarehouse={warehouseSelections[itemId]}
                     />
                   )}
                 </div>
@@ -341,6 +492,20 @@ export default function PurchasesPage() {
           })}
         </div>
       )}
+
+      {/* Toast slide-in animation */}
+      <style>{`
+        @keyframes slideInRight {
+          from {
+            opacity: 0;
+            transform: translateX(80px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+      `}</style>
     </div>
   );
 }
