@@ -49,7 +49,8 @@ async function fetchItemImages(itemIds: string[]): Promise<Map<string, string>> 
   if (itemIds.length === 0) return imageMap;
 
   const fs = require('fs');
-  const cachePath = '/Users/dudoan/Documents/Unnamed/gold-scrap-pwa/scratch/image-cache.json';
+  const path = require('path');
+  const cachePath = path.join(process.cwd(), 'scratch/image-cache.json');
   
   let cache: Record<string, string> = {};
   try {
@@ -100,10 +101,14 @@ async function fetchItemImages(itemIds: string[]): Promise<Map<string, string>> 
         }));
       }
 
-      // Write updated cache
-      const dir = require('path').dirname(cachePath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2), 'utf8');
+      // Write updated cache (wrap in try-catch for read-only systems)
+      try {
+        const dir = path.dirname(cachePath);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2), 'utf8');
+      } catch (writeErr) {
+        console.warn('[Purchases] Failed to save updated image cache (filesystem might be read-only):', writeErr);
+      }
     } catch (e) {
       console.error('[Purchases] Error during Browse API image fetch:', e);
     }
@@ -121,16 +126,14 @@ async function fetchItemImages(itemIds: string[]): Promise<Map<string, string>> 
 
 
 export async function GET(request: NextRequest) {
-  const fs = require('fs');
-  const logFile = '/Users/dudoan/Documents/Unnamed/gold-scrap-pwa/scratch/purchases.log';
-  fs.writeFileSync(logFile, `[${new Date().toISOString()}] GET purchases endpoint hit\n`);
-  fs.appendFileSync(logFile, `[${new Date().toISOString()}] EBAY_CLIENT_ID: ${process.env.EBAY_CLIENT_ID ? 'Exists (len: ' + process.env.EBAY_CLIENT_ID.length + ')' : 'MISSING'}\n`);
+  console.log(`[${new Date().toISOString()}] GET purchases endpoint hit`);
+  console.log(`[${new Date().toISOString()}] EBAY_CLIENT_ID: ${process.env.EBAY_CLIENT_ID ? 'Exists (len: ' + process.env.EBAY_CLIENT_ID.length + ')' : 'MISSING'}`);
 
   const cookieStore = cookies();
   const userToken = cookieStore.get('ebay_user_token')?.value;
 
   if (!userToken) {
-    fs.appendFileSync(logFile, `[${new Date().toISOString()}] Auth required: no userToken\n`);
+    console.log(`[${new Date().toISOString()}] Auth required: no userToken`);
     return NextResponse.json({ error: 'Not authenticated', code: 'AUTH_REQUIRED' }, { status: 401 });
   }
 
@@ -163,11 +166,14 @@ export async function GET(request: NextRequest) {
 
     const xmlResponse = await res.text();
 
-    // Write raw response to file for debugging
-    try {
-      const fs = require('fs');
-      fs.writeFileSync('/Users/dudoan/Documents/Unnamed/gold-scrap-pwa/ebay-orders-response.xml', xmlResponse);
-    } catch (e) { /* ignore */ }
+    // Write raw response to file for debugging (only in local dev)
+    if (process.env.NODE_ENV === 'development') {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        fs.writeFileSync(path.join(process.cwd(), 'ebay-orders-response.xml'), xmlResponse);
+      } catch (e) { /* ignore */ }
+    }
 
     if (!res.ok) {
       return NextResponse.json({ error: 'eBay API error' }, { status: res.status });
