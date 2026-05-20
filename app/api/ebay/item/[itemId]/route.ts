@@ -91,7 +91,7 @@ async function fetchItemWithBrowseAPI(itemId: string) {
     },
     condition: item.condition || 'Not Specified',
     listingType: item.buyingOptions?.includes('AUCTION') ? 'AUCTION' : 'FIXED_PRICE',
-    bidCount: parseInt(String(item.estimatedAvailabilities?.[0]?.estimatedSoldQuantity || '0'), 10),
+    bidCount: item.bidCount !== undefined ? parseInt(String(item.bidCount), 10) : 0,
     description: item.shortDescription || item.description || '',
     shippingCost: item.shippingOptions?.[0]?.shippingCost?.value || undefined,
     itemLocation: [item.itemLocation?.city, item.itemLocation?.country].filter(Boolean).join(', '),

@@ -215,6 +215,103 @@ async function deleteSnipeViaGixen(
   }
 }
 
+async function getSnipeStatusViaGixen(
+  username: string,
+  password: string,
+  itemId: string
+): Promise<{ status: string; message: string; cells?: string[] }> {
+  const browser = await getBrowser();
+
+  try {
+    const page = await browser.newPage();
+    await page.setUserAgent(
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    );
+
+    // Step 1: Go to Gixen login page
+    await page.goto('https://www.gixen.com/main/index.php', {
+      waitUntil: 'domcontentloaded',
+      timeout: 10000,
+    });
+
+    // Step 2: Fill and submit login form via JS
+    await page.evaluate(
+      (user: string, pass: string) => {
+        const userInput = document.querySelector('input[name="username"]') as HTMLInputElement;
+        const passInput = document.querySelector('input[name="password"]') as HTMLInputElement;
+        const form = userInput?.closest('form');
+        if (userInput) userInput.value = user;
+        if (passInput) passInput.value = pass;
+        if (form) form.submit();
+      },
+      username,
+      password
+    );
+
+    // Step 3: Wait for redirect to complete
+    await page.waitForSelector('#newitemid', { timeout: 10000 });
+
+    // Step 4: Find the row containing this itemId
+    const rowInfo = await page.evaluate((id: string) => {
+      const itemInput = document.querySelector(`input[name="edititemid"][value="${id}"]`);
+      if (!itemInput) return null;
+      
+      const row = itemInput.closest('tr');
+      if (!row) return null;
+      
+      // Get all cells (td) in the row
+      const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
+      return cells;
+    }, String(itemId));
+
+    if (!rowInfo) {
+      return { status: 'not_found', message: 'Không tìm thấy snipe trên Gixen' };
+    }
+
+    // Gixen columns:
+    // [0] Checkbox, [1] Item ID, [2] Description, [3] End Time, [4] Max Bid, [5] Result / Status
+    const statusText = rowInfo[5] || rowInfo[rowInfo.length - 1] || '';
+    
+    return { 
+      status: statusText.toLowerCase(), 
+      message: statusText,
+      cells: rowInfo 
+    };
+  } finally {
+    await browser.close();
+  }
+}
+
+export async function GET(request: NextRequest) {
+  try {
+    const searchParams = request.nextUrl.searchParams;
+    const itemId = searchParams.get('itemId');
+    const username = process.env.GIXEN_USER;
+    const password = process.env.GIXEN_PASS;
+
+    if (!username || !password) {
+      return NextResponse.json(
+        { error: 'Chưa cấu hình tài khoản Gixen (GIXEN_USER, GIXEN_PASS)' },
+        { status: 500 }
+      );
+    }
+
+    if (!itemId) {
+      return NextResponse.json({ error: 'Thiếu mã sản phẩm' }, { status: 400 });
+    }
+
+    const result = await getSnipeStatusViaGixen(username, password, itemId);
+    return NextResponse.json(result);
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Gixen Status Puppeteer error:', msg);
+    return NextResponse.json(
+      { error: `Lỗi check Gixen status: ${msg}` },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { action, itemId, maxBid } = await request.json();

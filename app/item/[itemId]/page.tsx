@@ -16,6 +16,7 @@ import {
   X,
   Share2,
   Calculator as CalcIcon,
+  Gavel,
 } from 'lucide-react';
 import { EbayItemDetail } from '@/lib/types';
 import { useCountdown } from '@/hooks/useCountdown';
@@ -38,6 +39,7 @@ export default function ItemDetailPage() {
   const [translated, setTranslated] = useState(false);
   const [translatedText, setTranslatedText] = useState('');
   const [calcOpen, setCalcOpen] = useState(false);
+  const [winnerStatus, setWinnerStatus] = useState<'checking' | 'won' | 'lost' | null>(null);
 
   const { toggleFavorite, isFavorite, isLoaded: isFavLoaded } = useFavorites();
   const { blockSeller } = useBlockedSellers();
@@ -62,43 +64,110 @@ export default function ItemDetailPage() {
     fetchItem();
   }, [itemId]);
 
-  // Smart Polling Effect
+  // Smart & Post-End Polling Effect
   useEffect(() => {
-    if (!item?.endTime) return;
+    if (!item?.endTime || item.listingType === 'FIXED_PRICE') return;
 
     let timeoutId: NodeJS.Timeout;
+    let gixenTimeoutId: NodeJS.Timeout;
+    
+    const savedSnipe = localStorage.getItem(`gixen_snipe_${item.itemId}`);
+    const endTimeMs = new Date(item.endTime).getTime();
+    let pollCount = 0;
+    const maxPolls = 24; // 2 minutes (24 * 5s)
 
     const poll = async () => {
-      const now = new Date().getTime();
-      const end = new Date(item.endTime!).getTime();
-      const timeLeft = end - now;
+      const now = Date.now();
+      const timeLeft = endTimeMs - now;
 
-      if (timeLeft <= 840000 && timeLeft > -60000) {
+      // 1. Fetch updated eBay item details (price, bidCount, isSold)
+      if (timeLeft <= 840000 && timeLeft > -120000) {
         try {
           const res = await fetch(`/api/ebay/item/${item.itemId}?t=${Date.now()}`);
           if (res.ok) {
             const data = await res.json();
-            setItem(prev => prev ? { ...prev, price: data.price, bidCount: data.bidCount, endTime: data.endTime, isSold: data.isSold, winner: data.winner } : null);
+            setItem(prev => prev ? { 
+              ...prev, 
+              price: data.price, 
+              bidCount: data.bidCount, 
+              endTime: data.endTime, 
+              isSold: data.isSold 
+            } : null);
           }
-        } catch {}
+        } catch (err) {
+          console.error('[eBay Polling Error]', err);
+        }
       }
 
-      if (timeLeft > 0 && timeLeft <= 840000) {
-        const interval = timeLeft <= 30000 ? 1000 : 10000;
+      // 2. Poll Gixen Status post-end if we placed a snipe and status is still checking
+      if (now > endTimeMs && savedSnipe && winnerStatus === 'checking') {
+        try {
+          const res = await fetch(`/api/gixen?itemId=${item.itemId}`);
+          if (res.ok) {
+            const data = await res.json();
+            const statusText = (data.status || '').toLowerCase();
+            if (statusText.includes('won') || statusText.includes('thắng')) {
+              setWinnerStatus('won');
+            } else if (statusText.includes('outbid') || statusText.includes('lost') || statusText.includes('thua') || statusText.includes('bị vượt')) {
+              setWinnerStatus('lost');
+            }
+          }
+        } catch (err) {
+          console.error('[Gixen Polling Error]', err);
+        }
+      }
+
+      // 3. Determine next poll interval
+      const updatedNow = Date.now();
+      const updatedTimeLeft = endTimeMs - updatedNow;
+
+      if (updatedTimeLeft > 0) {
+        // Pre-end polling: faster as we approach ending
+        const interval = updatedTimeLeft <= 30000 ? 1000 : 10000;
         timeoutId = setTimeout(poll, interval);
+      } else {
+        // Post-end polling: every 5 seconds up to 2 minutes
+        pollCount++;
+        if (pollCount < maxPolls && winnerStatus !== 'won' && winnerStatus !== 'lost') {
+          timeoutId = setTimeout(poll, 5000);
+        } else if (pollCount >= maxPolls && winnerStatus === 'checking') {
+          // Timeout fallback
+          setWinnerStatus('lost');
+        }
       }
     };
 
-    const now = new Date().getTime();
-    const end = new Date(item.endTime).getTime();
-    const timeLeft = end - now;
-    if (timeLeft > 0 && timeLeft <= 840000) {
-      const interval = timeLeft <= 30000 ? 1000 : 10000;
+    const now = Date.now();
+    const timeLeft = endTimeMs - now;
+
+    if (timeLeft <= 840000) {
+      // Initialize checking status if already ended and has snipe
+      if (timeLeft <= 0 && savedSnipe && !winnerStatus) {
+        setWinnerStatus('checking');
+      }
+      
+      const interval = timeLeft <= 0 ? 5000 : (timeLeft <= 30000 ? 1000 : 10000);
       timeoutId = setTimeout(poll, interval);
+    } else {
+      // Wait until 14 minutes before ending to start polling
+      const startPollingAt = timeLeft - 840000;
+      timeoutId = setTimeout(() => {
+        timeoutId = setTimeout(poll, 10000);
+      }, startPollingAt);
     }
 
-    return () => clearTimeout(timeoutId);
-  }, [item?.endTime, item?.itemId]);
+    // Trigger state change exactly at the end time to show "Checking..." banner
+    if (timeLeft > 0 && savedSnipe) {
+      gixenTimeoutId = setTimeout(() => {
+        setWinnerStatus('checking');
+      }, timeLeft);
+    }
+
+    return () => {
+      clearTimeout(timeoutId);
+      clearTimeout(gixenTimeoutId);
+    };
+  }, [item?.endTime, item?.itemId, winnerStatus]);
 
   if (loading) {
     return (
@@ -355,9 +424,9 @@ export default function ItemDetailPage() {
             <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--gold)' }}>
               ${item.price}
             </span>
-            {item.bidCount !== undefined && item.bidCount > 0 && (
-              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                {item.bidCount} lượt đấu
+            {item.listingType === 'AUCTION' && (
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Gavel size={12} /> {item.bidCount !== undefined ? item.bidCount : 0} lượt đấu
               </span>
             )}
             {item.shippingCost && (
@@ -375,6 +444,59 @@ export default function ItemDetailPage() {
 
           {/* Timer */}
           <ItemTimer endTime={item.endTime} listingType={item.listingType} />
+
+          {/* Winner Status Banner */}
+          {winnerStatus && item.listingType === 'AUCTION' && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '12px 16px',
+                borderRadius: 'var(--radius)',
+                border: '1px solid',
+                marginBottom: 12,
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                borderColor: 
+                  winnerStatus === 'won' ? 'var(--success)' :
+                  winnerStatus === 'lost' ? 'var(--border)' : 'var(--gold)',
+                background:
+                  winnerStatus === 'won' ? 'rgba(46, 204, 113, 0.1)' :
+                  winnerStatus === 'lost' ? 'rgba(255, 255, 255, 0.03)' : 'rgba(212, 175, 55, 0.1)',
+                color:
+                  winnerStatus === 'won' ? 'var(--success)' :
+                  winnerStatus === 'lost' ? 'var(--text-muted)' : 'var(--gold)',
+              }}
+            >
+              {winnerStatus === 'checking' && (
+                <>
+                  <span 
+                    style={{
+                      width: 14,
+                      height: 14,
+                      border: '2px solid var(--gold)',
+                      borderTopColor: 'transparent',
+                      borderRadius: '50%',
+                      display: 'inline-block',
+                      animation: 'spin 1s linear infinite'
+                    }} 
+                  />
+                  <span>Đang kiểm tra kết quả đấu giá trên eBay & Gixen... ⏳</span>
+                </>
+              )}
+              {winnerStatus === 'won' && (
+                <>
+                  <span>🏆 Chúc mừng! Bạn đã thắng cuộc đấu giá này!</span>
+                </>
+              )}
+              {winnerStatus === 'lost' && (
+                <>
+                  <span>❌ Đấu giá kết thúc. Bạn không thắng sản phẩm này.</span>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Seller info */}
           <div
