@@ -191,9 +191,12 @@ async function syncTrackingToGiaonhan247(
     // Read the text to confirm success
     const bodyText = await page.evaluate(() => document.body.innerText);
     const hasSuccess = bodyText.includes('Thành công') || bodyText.includes('thành công') || bodyText.includes('Success');
+    const alreadyExists = bodyText.includes('đã tồn tại') || bodyText.includes('Đã tồn tại');
 
     if (hasSuccess) {
       return { success: true, message: 'Đã cập nhật tracking thành công lên Giaonhan247!' };
+    } else if (alreadyExists) {
+      return { success: true, message: 'Tracking đã tồn tại trên Giaonhan247 (đã cập nhật trước đó).' };
     } else {
       // Find possible error messages in alert divs or paragraphs
       const errMsg = await page.evaluate(() => {
