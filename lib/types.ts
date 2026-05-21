@@ -57,6 +57,38 @@ export interface PurchaseEntry {
   ebayItemId?: string; // Link to original eBay item
   createdAt: string;
   isSynced?: boolean; // Giaonhan247 sync status
+  lotId?: string;     // ID of assigned lot
+  lotName?: string;   // Name of assigned lot
+}
+
+export interface Lot {
+  id: string;
+  name: string;
+  status: 'active' | 'closed';
+  revenue: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+  // Computed properties
+  itemCount?: number;
+  totalCost?: number;
+  profit?: number;
+  factor?: number; // Tỷ suất lợi nhuận (%)
+  items?: LotItem[];
+}
+
+export interface LotItem {
+  id: string;
+  lotId: string;
+  trackingNumber: string;
+  ebayItemId?: string;
+  ebayUrl?: string;
+  title?: string;
+  price: number;
+  shipping: number;
+  imageUrl?: string;
+  synced: boolean;
+  createdAt: string;
 }
 
 // Filter state

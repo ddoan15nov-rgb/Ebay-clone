@@ -369,14 +369,47 @@ export async function GET(request: NextRequest) {
       console.error('[Purchases] Failed to fetch activity logs:', e);
     }
 
+    // Fetch lot assignments for lotName and lotId
+    const lotMap = new Map<string, { lotId: string; lotName: string }>();
+    try {
+      const userId = await getEbayUsername();
+      if (userId) {
+        const { data, error } = await supabase
+          .from('lot_items')
+          .select('tracking_number, lot_id, lots(name)')
+          .eq('user_id', userId);
+        
+        if (data && !error) {
+          data.forEach((row: any) => {
+            if (row.tracking_number && row.lot_id) {
+              lotMap.set(String(row.tracking_number).trim(), {
+                lotId: row.lot_id,
+                lotName: row.lots?.name || 'Lô không tên',
+              });
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.error('[Purchases] Failed to fetch lot assignments:', e);
+    }
+
     const finalItems = Array.from(mergedMap.values()).concat(noTrackingItems);
-    // Clean up internal fields and assign isSynced
+    // Clean up internal fields and assign isSynced and lot details
     finalItems.forEach(item => {
-      if (item.trackingNumber && syncedTrackings.has(String(item.trackingNumber).trim())) {
+      const trackingClean = item.trackingNumber ? String(item.trackingNumber).trim() : '';
+      if (trackingClean && syncedTrackings.has(trackingClean)) {
         item.isSynced = true;
       } else {
         item.isSynced = false;
       }
+
+      if (trackingClean && lotMap.has(trackingClean)) {
+        const lotInfo = lotMap.get(trackingClean);
+        item.lotId = lotInfo?.lotId;
+        item.lotName = lotInfo?.lotName;
+      }
+
       delete item.mergedTitles;
       delete item.originalTitle;
     });
