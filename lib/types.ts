@@ -59,6 +59,7 @@ export interface PurchaseEntry {
   isSynced?: boolean; // Giaonhan247 sync status
   lotId?: string;     // ID of assigned lot
   lotName?: string;   // Name of assigned lot
+  intlShippingVnd?: number; // International shipping in VND
 }
 
 export interface Lot {

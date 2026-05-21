@@ -12,10 +12,11 @@ interface LotSummaryCardProps {
   onReopenLot: (id: string) => Promise<void>;
   onDeleteLot: (id: string) => Promise<void>;
   onUpdateIntlShipping?: (trackingNumber: string, vnd: number) => Promise<void>;
+  isExpanded: boolean;
+  onToggleExpand: () => void;
 }
 
-export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, onDeleteLot, onUpdateIntlShipping }: LotSummaryCardProps) {
-  const [isExpanded, setIsExpanded] = useState(false);
+export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, onDeleteLot, onUpdateIntlShipping, isExpanded, onToggleExpand }: LotSummaryCardProps) {
   const [isClosingMode, setIsClosingMode] = useState(false);
   const [revenueInput, setRevenueInput] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
@@ -114,7 +115,7 @@ export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, on
         {/* Action Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <button
-            onClick={() => setIsExpanded(!isExpanded)}
+            onClick={onToggleExpand}
             style={{
               background: 'none',
               border: 'none',
@@ -188,8 +189,11 @@ export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, on
                   alignItems: 'center',
                   gap: 10,
                   padding: '6px 8px',
-                  background: 'var(--surface)',
+                  background: !item.intlShippingVnd ? 'rgba(241, 196, 15, 0.04)' : 'var(--surface)',
                   borderRadius: 6,
+                  border: !item.intlShippingVnd ? '1px dashed rgba(241, 196, 15, 0.4)' : '1px solid transparent',
+                  boxShadow: !item.intlShippingVnd ? '0 0 10px rgba(241, 196, 15, 0.05)' : 'none',
+                  transition: 'all 0.25s ease',
                 }}
               >
                 {item.ebayItemId ? (
@@ -256,9 +260,13 @@ export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, on
                   )}
                   <p style={{ fontSize: '0.62rem', color: 'var(--text-dim)', margin: '2px 0 0' }}>
                     ${(item.price || 0).toFixed(2)} {item.shipping > 0 ? `+ $${item.shipping.toFixed(2)} ship` : ''}
-                    {item.intlShippingVnd > 0 && (
+                    {item.intlShippingVnd > 0 ? (
                       <span style={{ color: 'var(--gold)' }}>
                         {' '}+ {Number(item.intlShippingVnd).toLocaleString()}đ (~${(item.intlShippingVnd / 27).toFixed(2)})
+                      </span>
+                    ) : (
+                      <span style={{ color: '#f1c40f', fontSize: '0.6rem', fontWeight: 600, marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                        ⚠️ Chưa có phí ship VN
                       </span>
                     )}
                   </p>

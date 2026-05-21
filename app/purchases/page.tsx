@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import Link from 'next/link';
-import { ShoppingCart, PackageCheck, Truck, ExternalLink, Package, CreditCard, Clock, Warehouse, CheckCircle, AlertTriangle, X, RefreshCw, FolderOpen, FolderPlus, Search } from 'lucide-react';
+import { ShoppingCart, PackageCheck, Truck, ExternalLink, Package, CreditCard, Clock, Warehouse, CheckCircle, AlertTriangle, X, RefreshCw, FolderOpen, FolderPlus, Search, DollarSign } from 'lucide-react';
 import { PurchaseEntry, Lot } from '@/lib/types';
 import GiaonhanSyncWidget from '@/components/GiaonhanSyncWidget';
 import LotSelector from '@/components/LotSelector';
@@ -55,6 +55,39 @@ export default function PurchasesPage() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  // Expanded lots state (persistent parent state)
+  const [expandedLotIds, setExpandedLotIds] = useState<string[]>([]);
+  const handleToggleExpandLot = (lotId: string) => {
+    setExpandedLotIds(prev => 
+      prev.includes(lotId) ? prev.filter(id => id !== lotId) : [...prev, lotId]
+    );
+  };
+
+  // Sticky tabs show/hide on scroll
+  const [showStickyTabs, setShowStickyTabs] = useState(true);
+  const lastScrollY = useRef(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      if (currentScrollY <= 80) {
+        setShowStickyTabs(true);
+      } else if (currentScrollY > lastScrollY.current) {
+        setShowStickyTabs(false);
+      } else {
+        setShowStickyTabs(true);
+      }
+      lastScrollY.current = currentScrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // International shipping VND input states
+  const [vndInputs, setVndInputs] = useState<Record<string, string>>({});
+  const [savingVnd, setSavingVnd] = useState<Record<string, boolean>>({});
 
   const addToast = useCallback((type: 'success' | 'error', message: string) => {
     const id = toastId + 1;
@@ -215,8 +248,40 @@ export default function PurchasesPage() {
     }
   };
 
-  const handleUpdateIntlShipping = async (trackingNumber: string, vnd: number) => {
+  const handleUpdateIntlShipping = async (trackingNumber: string, vnd: number, entry?: PurchaseEntry) => {
     try {
+      let finalLotId = entry?.lotId;
+      let finalLotName = entry?.lotName;
+      setSavingVnd(prev => ({ ...prev, [trackingNumber]: true }));
+
+      if (!finalLotId && entry) {
+        // Find latest active lot to auto-assign
+        const activeLot = lots.find(l => l.status === 'active');
+        if (!activeLot) {
+          addToast('error', '⚠️ Vui lòng tạo hoặc chọn lô hàng trước khi nhập phí ship!');
+          setSavingVnd(prev => ({ ...prev, [trackingNumber]: false }));
+          return;
+        }
+        // Auto-assign to the active lot first
+        const details = await getLotItemDetails(trackingNumber);
+        const assignRes = await fetch('/api/sync/lot-items', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            lotId: activeLot.id,
+            trackingNumber,
+            ...details,
+          }),
+        });
+        if (!assignRes.ok) {
+          addToast('error', '❌ Lỗi tự động phân lô hàng');
+          setSavingVnd(prev => ({ ...prev, [trackingNumber]: false }));
+          return;
+        }
+        finalLotId = activeLot.id;
+        finalLotName = activeLot.name;
+      }
+
       const res = await fetch('/api/sync/lot-items', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -225,11 +290,24 @@ export default function PurchasesPage() {
       if (res.ok) {
         addToast('success', `✅ Đã cập nhật phí ship: ${vnd.toLocaleString()}đ (~$${(vnd / 27).toFixed(2)})`);
         await fetchLots();
+        // Update local items state for instant visual feedback on "Tất cả sản phẩm" list
+        setItems(prevItems =>
+          prevItems.map(item => {
+            if (item.trackingNumber === trackingNumber) {
+              return { ...item, intlShippingVnd: vnd, lotId: finalLotId, lotName: finalLotName };
+            }
+            return item;
+          })
+        );
+        // Clear local inputs state so we fallback to new saved value
+        setVndInputs(prev => { const copy = { ...prev }; delete copy[trackingNumber]; return copy; });
       } else {
         addToast('error', '❌ Lỗi cập nhật phí vận chuyển');
       }
     } catch {
       addToast('error', '❌ Không thể kết nối đến máy chủ');
+    } finally {
+      setSavingVnd(prev => ({ ...prev, [trackingNumber]: false }));
     }
   };
 
@@ -449,14 +527,23 @@ export default function PurchasesPage() {
 
       {/* Tab Selector */}
       <div style={{
+        position: 'sticky',
+        top: 10,
+        zIndex: 100,
         display: 'flex',
         gap: 8,
         margin: '16px 0',
         padding: 4,
-        background: 'var(--surface)',
+        background: 'rgba(26, 26, 26, 0.85)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
         border: '1px solid var(--border)',
         borderRadius: 10,
-        width: 'fit-content'
+        width: 'fit-content',
+        transform: showStickyTabs ? 'translateY(0)' : 'translateY(-80px)',
+        opacity: showStickyTabs ? 1 : 0,
+        transition: 'transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease',
+        boxShadow: showStickyTabs ? '0 10px 30px rgba(0,0,0,0.3)' : 'none',
       }}>
         <button
           onClick={() => setActiveTab('all')}
@@ -587,9 +674,11 @@ export default function PurchasesPage() {
                       display: 'flex',
                       gap: 12,
                       padding: 12,
-                      background: 'var(--card)',
+                      background: (entry.trackingNumber && !entry.intlShippingVnd) ? 'rgba(241, 196, 15, 0.04)' : 'var(--card)',
                       borderRadius: 'var(--radius-sm)',
-                      border: '1px solid var(--border)',
+                      border: (entry.trackingNumber && !entry.intlShippingVnd) ? '1px dashed rgba(241, 196, 15, 0.4)' : '1px solid var(--border)',
+                      boxShadow: (entry.trackingNumber && !entry.intlShippingVnd) ? '0 0 12px rgba(241, 196, 15, 0.05)' : 'none',
+                      transition: 'all 0.25s ease',
                     }}
                   >
                     {/* Thumbnail */}
@@ -662,7 +751,7 @@ export default function PurchasesPage() {
                       )}
 
                       {/* Price row */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--gold)' }}>
                           ${entry.gia.toFixed(2)}
                         </span>
@@ -676,6 +765,15 @@ export default function PurchasesPage() {
                             Free ship
                           </span>
                         )}
+                        {entry.intlShippingVnd && entry.intlShippingVnd > 0 ? (
+                          <span style={{ color: 'var(--gold)', fontSize: '0.7rem', fontWeight: 500 }}>
+                            + {Number(entry.intlShippingVnd).toLocaleString()}đ (~${(entry.intlShippingVnd / 27).toFixed(2)})
+                          </span>
+                        ) : entry.trackingNumber ? (
+                          <span style={{ color: '#f1c40f', fontSize: '0.65rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                            ⚠️ Chưa có phí ship VN
+                          </span>
+                        ) : null}
                       </div>
 
                       {/* Status badge */}
@@ -745,6 +843,56 @@ export default function PurchasesPage() {
                           </span>
                         )}
                       </div>
+
+                      {/* International Shipping Input */}
+                      {entry.trackingNumber && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, margin: '6px 0 8px' }}>
+                          <input
+                            type="number"
+                            placeholder="Nhập ship VN (VND)..."
+                            value={vndInputs[entry.trackingNumber || ''] ?? (entry.intlShippingVnd && entry.intlShippingVnd > 0 ? String(entry.intlShippingVnd) : '')}
+                            onChange={(e) => setVndInputs(prev => ({ ...prev, [entry.trackingNumber || '']: e.target.value }))}
+                            style={{
+                              width: 120,
+                              padding: '4px 8px',
+                              fontSize: '0.7rem',
+                              background: 'var(--surface)',
+                              border: '1px solid var(--border)',
+                              borderRadius: 6,
+                              color: 'var(--text)',
+                              outline: 'none',
+                            }}
+                            onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.4)'; }}
+                            onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                          />
+                          {vndInputs[entry.trackingNumber || ''] !== undefined && String(vndInputs[entry.trackingNumber || '']) !== String(entry.intlShippingVnd || '') && (
+                            <span style={{ fontSize: '0.65rem', color: 'var(--text-dim)' }}>
+                              ≈ ${(Number(vndInputs[entry.trackingNumber || ''] || 0) / 27).toFixed(2)}
+                            </span>
+                          )}
+                          <button
+                            disabled={savingVnd[entry.trackingNumber || '']}
+                            onClick={() => handleUpdateIntlShipping(entry.trackingNumber || '', Number(vndInputs[entry.trackingNumber || ''] ?? entry.intlShippingVnd ?? 0), entry)}
+                            style={{
+                              padding: '3px 8px',
+                              fontSize: '0.65rem',
+                              fontWeight: 600,
+                              background: 'rgba(212, 175, 55, 0.15)',
+                              border: '1px solid rgba(212, 175, 55, 0.3)',
+                              borderRadius: 6,
+                              color: 'var(--gold)',
+                              cursor: 'pointer',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              height: 24,
+                            }}
+                          >
+                            {savingVnd[entry.trackingNumber || ''] ? <RefreshCw size={10} className="spinner" /> : <DollarSign size={10} />}
+                            <span>Lưu</span>
+                          </button>
+                        </div>
+                      )}
 
                       {/* Warehouse Selection Row */}
                       <div
@@ -996,6 +1144,8 @@ export default function PurchasesPage() {
                   onReopenLot={handleReopenLot}
                   onDeleteLot={handleDeleteLot}
                   onUpdateIntlShipping={handleUpdateIntlShipping}
+                  isExpanded={expandedLotIds.includes(lot.id)}
+                  onToggleExpand={() => handleToggleExpandLot(lot.id)}
                 />
               ))
             )}
@@ -1041,6 +1191,8 @@ export default function PurchasesPage() {
                       onReopenLot={handleReopenLot}
                       onDeleteLot={handleDeleteLot}
                       onUpdateIntlShipping={handleUpdateIntlShipping}
+                      isExpanded={expandedLotIds.includes(lot.id)}
+                      onToggleExpand={() => handleToggleExpandLot(lot.id)}
                     />
                   ))
                 )}

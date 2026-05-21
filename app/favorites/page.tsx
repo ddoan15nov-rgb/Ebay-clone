@@ -26,7 +26,22 @@ export default function FavoritesPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const [activeTab, setActiveTab] = useState<'active' | 'ended'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'ended'>(() => {
+    if (typeof window === 'undefined') return 'active';
+    try {
+      const cached = sessionStorage.getItem('favorites_active_tab');
+      return (cached === 'active' || cached === 'ended') ? cached : 'active';
+    } catch {
+      return 'active';
+    }
+  });
+
+  const handleSelectTab = (tab: 'active' | 'ended') => {
+    setActiveTab(tab);
+    try {
+      sessionStorage.setItem('favorites_active_tab', tab);
+    } catch {}
+  };
 
   // Load snipe bids for badge display
   const [snipes, setSnipes] = useState<Record<string, string>>({});
@@ -156,7 +171,7 @@ export default function FavoritesPage() {
         borderBottom: '1px solid var(--border)',
       }}>
         <button
-          onClick={() => setActiveTab('active')}
+          onClick={() => handleSelectTab('active')}
           style={{
             flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer',
             background: 'none', fontSize: '0.82rem', fontWeight: 600,
@@ -168,7 +183,7 @@ export default function FavoritesPage() {
           Đang hoạt động ({activeItems.length})
         </button>
         <button
-          onClick={() => setActiveTab('ended')}
+          onClick={() => handleSelectTab('ended')}
           style={{
             flex: 1, padding: '10px 0', border: 'none', cursor: 'pointer',
             background: 'none', fontSize: '0.82rem', fontWeight: 600,

@@ -384,13 +384,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Fetch lot assignments for lotName and lotId
-    const lotMap = new Map<string, { lotId: string; lotName: string }>();
+    const lotMap = new Map<string, { lotId: string; lotName: string; intlShippingVnd: number }>();
     try {
       const userId = await getEbayUsername();
       if (userId) {
         const { data, error } = await supabase
           .from('lot_items')
-          .select('tracking_number, lot_id, lots(name)')
+          .select('tracking_number, lot_id, intl_shipping_vnd, lots(name)')
           .eq('user_id', userId);
         
         if (data && !error) {
@@ -399,6 +399,7 @@ export async function GET(request: NextRequest) {
               lotMap.set(String(row.tracking_number).trim(), {
                 lotId: row.lot_id,
                 lotName: row.lots?.name || 'Lô không tên',
+                intlShippingVnd: Number(row.intl_shipping_vnd || 0),
               });
             }
           });
@@ -422,6 +423,9 @@ export async function GET(request: NextRequest) {
         const lotInfo = lotMap.get(trackingClean);
         item.lotId = lotInfo?.lotId;
         item.lotName = lotInfo?.lotName;
+        item.intlShippingVnd = lotInfo?.intlShippingVnd || 0;
+      } else {
+        item.intlShippingVnd = 0;
       }
 
       delete item.mergedTitles;
