@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ChevronUp, Trash2, Folder, ExternalLink, Lock, CheckCircle2, RefreshCw, DollarSign } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, Folder, ExternalLink, Lock, CheckCircle2, RefreshCw, DollarSign, Copy, Check } from 'lucide-react';
 import { Lot, LotItem } from '@/lib/types';
 
 interface LotSummaryCardProps {
@@ -22,6 +22,15 @@ export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, on
   const [actionLoading, setActionLoading] = useState(false);
   const [vndInputs, setVndInputs] = useState<Record<string, string>>({});
   const [savingVnd, setSavingVnd] = useState<Record<string, boolean>>({});
+  const [copiedTracking, setCopiedTracking] = useState<string | null>(null);
+
+  const handleCopy = (tracking: string) => {
+    navigator.clipboard.writeText(tracking);
+    setCopiedTracking(tracking);
+    setTimeout(() => {
+      setCopiedTracking(null);
+    }, 2000);
+  };
 
   const totalCost = lot.totalCost || 0;
   const isClosed = lot.status === 'closed';
@@ -194,6 +203,8 @@ export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, on
                   border: !item.intlShippingVnd ? '1px dashed rgba(241, 196, 15, 0.4)' : '1px solid transparent',
                   boxShadow: !item.intlShippingVnd ? '0 0 10px rgba(241, 196, 15, 0.05)' : 'none',
                   transition: 'all 0.25s ease',
+                  position: 'relative',
+                  paddingBottom: item.trackingNumber ? '26px' : '6px',
                 }}
               >
                 {item.ebayItemId ? (
@@ -333,6 +344,57 @@ export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, on
                   >
                     <ExternalLink size={12} />
                   </a>
+                )}
+
+                {item.trackingNumber && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: 4,
+                      right: 6,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      background: 'rgba(0, 0, 0, 0.25)',
+                      padding: '2px 5px',
+                      borderRadius: 4,
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: '0.55rem',
+                        fontFamily: 'monospace',
+                        color: 'var(--text-muted)',
+                        letterSpacing: '0.02em',
+                      }}
+                    >
+                      {item.trackingNumber}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopy(item.trackingNumber);
+                      }}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: copiedTracking === item.trackingNumber ? 'var(--success)' : 'var(--text-dim)',
+                        cursor: 'pointer',
+                        padding: 1,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      title="Sao chép mã tracking"
+                    >
+                      {copiedTracking === item.trackingNumber ? (
+                        <Check size={8} />
+                      ) : (
+                        <Copy size={8} />
+                      )}
+                    </button>
+                  </div>
                 )}
               </div>
             ))
