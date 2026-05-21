@@ -215,6 +215,24 @@ export default function PurchasesPage() {
     }
   };
 
+  const handleUpdateIntlShipping = async (trackingNumber: string, vnd: number) => {
+    try {
+      const res = await fetch('/api/sync/lot-items', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trackingNumber, intlShippingVnd: vnd }),
+      });
+      if (res.ok) {
+        addToast('success', `✅ Đã cập nhật phí ship: ${vnd.toLocaleString()}đ (~$${(vnd / 27).toFixed(2)})`);
+        await fetchLots();
+      } else {
+        addToast('error', '❌ Lỗi cập nhật phí vận chuyển');
+      }
+    } catch {
+      addToast('error', '❌ Không thể kết nối đến máy chủ');
+    }
+  };
+
   const fetchPurchasesPage = useCallback(async (page: number, append: boolean = false) => {
     if (append) setLoadingMore(true);
     try {
@@ -977,6 +995,7 @@ export default function PurchasesPage() {
                   onCloseLot={handleCloseLot}
                   onReopenLot={handleReopenLot}
                   onDeleteLot={handleDeleteLot}
+                  onUpdateIntlShipping={handleUpdateIntlShipping}
                 />
               ))
             )}
@@ -1021,6 +1040,7 @@ export default function PurchasesPage() {
                       onCloseLot={handleCloseLot}
                       onReopenLot={handleReopenLot}
                       onDeleteLot={handleDeleteLot}
+                      onUpdateIntlShipping={handleUpdateIntlShipping}
                     />
                   ))
                 )}

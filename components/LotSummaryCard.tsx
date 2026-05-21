@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { ChevronDown, ChevronUp, Trash2, Folder, ExternalLink, Lock, CheckCircle2, RefreshCw } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, Folder, ExternalLink, Lock, CheckCircle2, RefreshCw, DollarSign } from 'lucide-react';
 import { Lot, LotItem } from '@/lib/types';
 
 interface LotSummaryCardProps {
@@ -11,13 +11,16 @@ interface LotSummaryCardProps {
   onCloseLot: (id: string, revenue: number) => Promise<void>;
   onReopenLot: (id: string) => Promise<void>;
   onDeleteLot: (id: string) => Promise<void>;
+  onUpdateIntlShipping?: (trackingNumber: string, vnd: number) => Promise<void>;
 }
 
-export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, onDeleteLot }: LotSummaryCardProps) {
+export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, onDeleteLot, onUpdateIntlShipping }: LotSummaryCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isClosingMode, setIsClosingMode] = useState(false);
   const [revenueInput, setRevenueInput] = useState('');
   const [actionLoading, setActionLoading] = useState(false);
+  const [vndInputs, setVndInputs] = useState<Record<string, string>>({});
+  const [savingVnd, setSavingVnd] = useState<Record<string, boolean>>({});
 
   const totalCost = lot.totalCost || 0;
   const isClosed = lot.status === 'closed';
@@ -253,7 +256,65 @@ export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, on
                   )}
                   <p style={{ fontSize: '0.62rem', color: 'var(--text-dim)', margin: '2px 0 0' }}>
                     ${(item.price || 0).toFixed(2)} {item.shipping > 0 ? `+ $${item.shipping.toFixed(2)} ship` : ''}
+                    {item.intlShippingVnd > 0 && (
+                      <span style={{ color: 'var(--gold)' }}>
+                        {' '}+ {Number(item.intlShippingVnd).toLocaleString()}đ (~${(item.intlShippingVnd / 27).toFixed(2)})
+                      </span>
+                    )}
                   </p>
+                  {/* VND shipping input */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                    <input
+                      type="number"
+                      placeholder="VND ship..."
+                      value={vndInputs[item.trackingNumber] ?? (item.intlShippingVnd > 0 ? String(item.intlShippingVnd) : '')}
+                      onChange={(e) => setVndInputs(prev => ({ ...prev, [item.trackingNumber]: e.target.value }))}
+                      style={{
+                        width: 90,
+                        padding: '3px 6px',
+                        fontSize: '0.6rem',
+                        background: 'var(--card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 5,
+                        color: 'var(--text)',
+                        outline: 'none',
+                      }}
+                      onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.4)'; }}
+                      onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+                    />
+                    {vndInputs[item.trackingNumber] !== undefined && String(vndInputs[item.trackingNumber]) !== String(item.intlShippingVnd || '') && (
+                      <span style={{ fontSize: '0.55rem', color: 'var(--text-dim)' }}>
+                        ≈ ${(Number(vndInputs[item.trackingNumber] || 0) / 27).toFixed(2)}
+                      </span>
+                    )}
+                    <button
+                      disabled={savingVnd[item.trackingNumber]}
+                      onClick={async () => {
+                        if (!onUpdateIntlShipping) return;
+                        const vnd = Number(vndInputs[item.trackingNumber] ?? item.intlShippingVnd ?? 0);
+                        setSavingVnd(prev => ({ ...prev, [item.trackingNumber]: true }));
+                        try {
+                          await onUpdateIntlShipping(item.trackingNumber, vnd);
+                          setVndInputs(prev => { const copy = { ...prev }; delete copy[item.trackingNumber]; return copy; });
+                        } finally {
+                          setSavingVnd(prev => ({ ...prev, [item.trackingNumber]: false }));
+                        }
+                      }}
+                      style={{
+                        padding: '2px 6px',
+                        fontSize: '0.55rem',
+                        fontWeight: 600,
+                        background: 'rgba(212, 175, 55, 0.15)',
+                        border: '1px solid rgba(212, 175, 55, 0.3)',
+                        borderRadius: 4,
+                        color: 'var(--gold)',
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {savingVnd[item.trackingNumber] ? <RefreshCw size={8} className="spinner" /> : <DollarSign size={8} />}
+                    </button>
+                  </div>
                 </div>
                 {item.ebayItemId && (
                   <a

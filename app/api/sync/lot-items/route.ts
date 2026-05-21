@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
         title: r.title,
         price: r.price,
         shipping: r.shipping,
+        intlShippingVnd: Number(r.intl_shipping_vnd || 0),
         imageUrl: r.image_url,
         synced: r.synced,
         createdAt: r.created_at,
@@ -69,6 +70,7 @@ export async function POST(request: NextRequest) {
       shipping,
       imageUrl,
       synced,
+      intlShippingVnd,
     } = body;
 
     if (!trackingNumber) {
@@ -116,6 +118,7 @@ export async function POST(request: NextRequest) {
           title: title || null,
           price: price !== undefined ? Number(price) : 0,
           shipping: shipping !== undefined ? Number(shipping) : 0,
+          intl_shipping_vnd: intlShippingVnd !== undefined ? Number(intlShippingVnd) : 0,
           image_url: imageUrl || null,
           synced: !!synced,
           created_at: new Date().toISOString(),
@@ -167,3 +170,37 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
   }
 }
+
+// PATCH /api/sync/lot-items — Update international shipping cost (VND) for a lot item
+export async function PATCH(request: NextRequest) {
+  try {
+    const userId = await getEbayUsername();
+    if (!userId) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { trackingNumber, intlShippingVnd } = body;
+
+    if (!trackingNumber) {
+      return NextResponse.json({ error: 'Thiếu số tracking' }, { status: 400 });
+    }
+
+    const { error } = await supabase
+      .from('lot_items')
+      .update({ intl_shipping_vnd: Number(intlShippingVnd || 0) })
+      .eq('user_id', userId)
+      .eq('tracking_number', trackingNumber.trim());
+
+    if (error) {
+      console.error('[sync/lot-items] PATCH error:', error);
+      return NextResponse.json({ error: 'Không thể cập nhật phí vận chuyển' }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error('[sync/lot-items] PATCH exception:', error);
+    return NextResponse.json({ error: 'Server error' }, { status: 500 });
+  }
+}
+

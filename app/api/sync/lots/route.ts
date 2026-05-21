@@ -34,7 +34,12 @@ export async function GET(request: NextRequest) {
       const items = lot.lot_items || [];
       const itemCount = items.length;
       const totalCost = Number(
-        items.reduce((sum: number, item: any) => sum + Number(item.price || 0) + Number(item.shipping || 0), 0).toFixed(2)
+        items.reduce((sum: number, item: any) => {
+          const itemPrice = Number(item.price || 0);
+          const ebayShipping = Number(item.shipping || 0);
+          const intlShippingUsd = Number(item.intl_shipping_vnd || 0) / 27;
+          return sum + itemPrice + ebayShipping + intlShippingUsd;
+        }, 0).toFixed(2)
       );
       const revenue = Number(lot.revenue || 0);
       const profit = lot.status === 'closed' ? Number((revenue - totalCost).toFixed(2)) : 0;
@@ -63,6 +68,7 @@ export async function GET(request: NextRequest) {
           title: r.title,
           price: r.price,
           shipping: r.shipping,
+          intlShippingVnd: Number(r.intl_shipping_vnd || 0),
           imageUrl: r.image_url,
           synced: r.synced,
           createdAt: r.created_at,

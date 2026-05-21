@@ -86,6 +86,7 @@ export interface LotItem {
   title?: string;
   price: number;
   shipping: number;
+  intlShippingVnd: number; // Phí vận chuyển quốc tế (VND), quy đổi USD = VND / 27
   imageUrl?: string;
   synced: boolean;
   createdAt: string;
