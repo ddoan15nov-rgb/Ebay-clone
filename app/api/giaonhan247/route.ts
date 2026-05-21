@@ -227,7 +227,7 @@ export async function POST(request: NextRequest) {
     const result = await syncTrackingToGiaonhan247({
       trackingNumber,
       tuyen: tuyen || '8', // default Oregon
-      gia: gia || 0,
+      gia: Math.round(gia || 0),
       isBlock: !!isBlock,
       reason,
       itemUrl,
