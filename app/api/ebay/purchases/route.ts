@@ -142,6 +142,14 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const pageNumber = parseInt(searchParams.get('page') || '1', 10);
 
+  // Calculate sliding 30-day date windows to avoid exceeding the 30-day maximum time window limit of GetOrders
+  const now = new Date();
+  const toDate = new Date(now.getTime() - (pageNumber - 1) * 30 * 24 * 60 * 60 * 1000);
+  const fromDate = new Date(now.getTime() - pageNumber * 30 * 24 * 60 * 60 * 1000);
+
+  const createTimeFrom = fromDate.toISOString();
+  const createTimeTo = toDate.toISOString();
+
   // Use GetOrders with OrderRole=Buyer to get full order details including tracking
   const xmlRequest = `<?xml version="1.0" encoding="utf-8"?>
 <GetOrdersRequest xmlns="urn:ebay:apis:eBLBaseComponents">
@@ -149,10 +157,11 @@ export async function GET(request: NextRequest) {
   <WarningLevel>High</WarningLevel>
   <DetailLevel>ReturnAll</DetailLevel>
   <OrderRole>Buyer</OrderRole>
-  <NumberOfDays>90</NumberOfDays>
+  <CreateTimeFrom>${createTimeFrom}</CreateTimeFrom>
+  <CreateTimeTo>${createTimeTo}</CreateTimeTo>
   <Pagination>
     <EntriesPerPage>100</EntriesPerPage>
-    <PageNumber>${pageNumber}</PageNumber>
+    <PageNumber>1</PageNumber>
   </Pagination>
 </GetOrdersRequest>`;
 
@@ -202,16 +211,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: errorMsg }, { status: 500 });
     }
 
-    // Extract pagination info from GetOrdersResponse
-    const paginationResult = responseData.PaginationResult;
-    const totalPages = parseInt(paginationResult?.TotalNumberOfPages || '1', 10);
-    const totalEntries = parseInt(paginationResult?.TotalNumberOfEntries || '0', 10);
-    const hasMore = pageNumber < totalPages;
-
     // Extract Orders from GetOrdersResponse
     const orderArray = responseData.OrderArray;
+    const hasMore = pageNumber < 4 && !!(orderArray && orderArray.Order);
+
     if (!orderArray || !orderArray.Order) {
-      return NextResponse.json({ items: [], page: pageNumber, totalPages, totalEntries, hasMore: false });
+      return NextResponse.json({ items: [], page: pageNumber, totalPages: 4, totalEntries: 0, hasMore: false });
     }
 
     let orders = orderArray.Order;
@@ -425,7 +430,7 @@ export async function GET(request: NextRequest) {
     // Re-sort after merging
     finalItems.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    return NextResponse.json({ items: finalItems, page: pageNumber, totalPages, totalEntries, hasMore });
+    return NextResponse.json({ items: finalItems, page: pageNumber, totalPages: 4, totalEntries: finalItems.length, hasMore });
   } catch (error) {
     console.error('Purchases API Exception:', error);
     return NextResponse.json({ error: 'Server exception' }, { status: 500 });
