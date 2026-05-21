@@ -139,6 +139,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Not authenticated', code: 'AUTH_REQUIRED' }, { status: 401 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const pageNumber = parseInt(searchParams.get('page') || '1', 10);
+
   // Use GetOrders with OrderRole=Buyer to get full order details including tracking
   const xmlRequest = `<?xml version="1.0" encoding="utf-8"?>
 <GetOrdersRequest xmlns="urn:ebay:apis:eBLBaseComponents">
@@ -146,10 +149,10 @@ export async function GET(request: NextRequest) {
   <WarningLevel>High</WarningLevel>
   <DetailLevel>ReturnAll</DetailLevel>
   <OrderRole>Buyer</OrderRole>
-  <NumberOfDays>30</NumberOfDays>
+  <NumberOfDays>90</NumberOfDays>
   <Pagination>
     <EntriesPerPage>100</EntriesPerPage>
-    <PageNumber>1</PageNumber>
+    <PageNumber>${pageNumber}</PageNumber>
   </Pagination>
 </GetOrdersRequest>`;
 
@@ -199,10 +202,16 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: errorMsg }, { status: 500 });
     }
 
+    // Extract pagination info from GetOrdersResponse
+    const paginationResult = responseData.PaginationResult;
+    const totalPages = parseInt(paginationResult?.TotalNumberOfPages || '1', 10);
+    const totalEntries = parseInt(paginationResult?.TotalNumberOfEntries || '0', 10);
+    const hasMore = pageNumber < totalPages;
+
     // Extract Orders from GetOrdersResponse
     const orderArray = responseData.OrderArray;
     if (!orderArray || !orderArray.Order) {
-      return NextResponse.json({ items: [] });
+      return NextResponse.json({ items: [], page: pageNumber, totalPages, totalEntries, hasMore: false });
     }
 
     let orders = orderArray.Order;
@@ -416,7 +425,7 @@ export async function GET(request: NextRequest) {
     // Re-sort after merging
     finalItems.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    return NextResponse.json({ items: finalItems });
+    return NextResponse.json({ items: finalItems, page: pageNumber, totalPages, totalEntries, hasMore });
   } catch (error) {
     console.error('Purchases API Exception:', error);
     return NextResponse.json({ error: 'Server exception' }, { status: 500 });

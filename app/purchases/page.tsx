@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { ShoppingCart, PackageCheck, Truck, ExternalLink, Package, CreditCard, Clock, Warehouse, CheckCircle, AlertTriangle, X, RefreshCw, FolderOpen, FolderPlus } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { ShoppingCart, PackageCheck, Truck, ExternalLink, Package, CreditCard, Clock, Warehouse, CheckCircle, AlertTriangle, X, RefreshCw, FolderOpen, FolderPlus, Search } from 'lucide-react';
 import { PurchaseEntry, Lot } from '@/lib/types';
 import GiaonhanSyncWidget from '@/components/GiaonhanSyncWidget';
 import LotSelector from '@/components/LotSelector';
@@ -47,6 +47,13 @@ export default function PurchasesPage() {
   const [showClosedLots, setShowClosedLots] = useState(false);
   const [createLotInput, setCreateLotInput] = useState('');
   const [createLotLoading, setCreateLotLoading] = useState(false);
+
+  // Search & pagination
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   const addToast = useCallback((type: 'success' | 'error', message: string) => {
     const id = toastId + 1;
@@ -207,24 +214,53 @@ export default function PurchasesPage() {
     }
   };
 
-  useEffect(() => {
-    const fetchPurchasesAndWarehouse = async () => {
-      try {
-        const res = await fetch('/api/ebay/purchases');
-        const data = await res.json();
+  const fetchPurchasesPage = useCallback(async (page: number, append: boolean = false) => {
+    if (append) setLoadingMore(true);
+    try {
+      const res = await fetch(`/api/ebay/purchases?page=${page}`);
+      const data = await res.json();
 
-        if (res.status === 401 && data.code === 'AUTH_REQUIRED') {
-          window.location.href = '/api/auth/login';
-          return;
-        }
+      if (res.status === 401 && data.code === 'AUTH_REQUIRED') {
+        window.location.href = '/api/auth/login';
+        return;
+      }
 
-        if (res.ok && data.items) {
-          setItems(data.items);
+      if (res.ok && data.items) {
+        if (append) {
+          // Deduplicate by id when appending pages
+          setItems(prev => {
+            const existingIds = new Set(prev.map(i => i.id));
+            const newItems = data.items.filter((i: PurchaseEntry) => !existingIds.has(i.id));
+            return [...prev, ...newItems];
+          });
         } else {
-          setError(data.error || 'Failed to load');
+          setItems(data.items);
         }
+        setCurrentPage(data.page || page);
+        setHasMore(!!data.hasMore);
+      } else if (!append) {
+        setError(data.error || 'Failed to load');
+      }
+    } catch (err) {
+      console.error('Failed to fetch purchases', err);
+      if (!append) setError('Không thể kết nối');
+    } finally {
+      if (append) setLoadingMore(false);
+      else setLoading(false);
+    }
+  }, []);
 
-        // Fetch warehouse configurations from snipes sync API
+  const loadNextPage = useCallback(() => {
+    if (loadingMore || !hasMore) return;
+    fetchPurchasesPage(currentPage + 1, true);
+  }, [loadingMore, hasMore, currentPage, fetchPurchasesPage]);
+
+  useEffect(() => {
+    const fetchInitial = async () => {
+      await fetchPurchasesPage(1, false);
+
+      // Fetch warehouse configurations from snipes sync API
+      try {
         const syncRes = await fetch('/api/sync/snipes');
         if (syncRes.ok) {
           const syncData = await syncRes.json();
@@ -239,17 +275,46 @@ export default function PurchasesPage() {
             setWarehouseSelections(whMap);
           }
         }
-      } catch (err) {
-        console.error('Failed to fetch purchases', err);
-        setError('Không thể kết nối');
-      } finally {
-        setLoading(false);
-      }
+      } catch { /* ignore */ }
     };
 
-    fetchPurchasesAndWarehouse();
+    fetchInitial();
     fetchLots();
-  }, [fetchLots]);
+  }, [fetchLots, fetchPurchasesPage]);
+
+  // Infinite scroll observer
+  useEffect(() => {
+    if (!loadMoreRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && activeTab === 'all') {
+          loadNextPage();
+        }
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loadNextPage, activeTab]);
+
+  // Client-side search filtering
+  const filteredItems = useMemo(() => {
+    if (!searchQuery.trim()) return items;
+    const q = searchQuery.trim().toLowerCase();
+    return items.filter(item => {
+      // Match by title
+      if (item.title.toLowerCase().includes(q)) return true;
+      // Match by full tracking number
+      if (item.trackingNumber && item.trackingNumber.toLowerCase().includes(q)) return true;
+      // Match by last 4 digits of tracking
+      if (item.trackingNumber && item.trackingNumber.slice(-4).toLowerCase() === q) return true;
+      // Match by ebay item id
+      if (item.ebayItemId && item.ebayItemId.includes(q)) return true;
+      // Match by lot name
+      if (item.lotName && item.lotName.toLowerCase().includes(q)) return true;
+      return false;
+    });
+  }, [items, searchQuery]);
 
   const getWarehouseLabel = (id: string) => {
     const wh = WAREHOUSE_OPTIONS.find(w => w.value === id);
@@ -360,7 +425,7 @@ export default function PurchasesPage() {
         Mua Hàng
       </h1>
       <p className="page-subtitle">
-        {items.length > 0 ? `${items.length} sản phẩm đã mua` : 'Đồng bộ từ eBay'}
+        {items.length > 0 ? `${items.length} sản phẩm đã mua${searchQuery ? ` • ${filteredItems.length} kết quả` : ''}${hasMore ? ' (cuộn xuống để tải thêm)' : ''}` : 'Đồng bộ từ eBay'}
       </p>
 
       {/* Tab Selector */}
@@ -424,20 +489,74 @@ export default function PurchasesPage() {
         </div>
       )}
 
+      {/* Search Bar */}
+      {activeTab === 'all' && items.length > 0 && (
+        <div style={{
+          position: 'relative',
+          marginBottom: 12,
+        }}>
+          <Search size={14} style={{
+            position: 'absolute',
+            left: 12,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            color: 'var(--text-dim)',
+            pointerEvents: 'none',
+          }} />
+          <input
+            type="text"
+            placeholder="Tìm theo tên, tracking, 4 số cuối, lô hàng..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            style={{
+              width: '100%',
+              padding: '10px 12px 10px 34px',
+              fontSize: '0.8rem',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              color: 'var(--text)',
+              outline: 'none',
+              transition: 'border-color 0.2s ease',
+            }}
+            onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(212, 175, 55, 0.4)'; }}
+            onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              style={{
+                position: 'absolute',
+                right: 10,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                background: 'none',
+                border: 'none',
+                color: 'var(--text-dim)',
+                cursor: 'pointer',
+                padding: 2,
+              }}
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Tab: Tất cả sản phẩm */}
       {activeTab === 'all' && (
         <>
-          {items.length === 0 && !error ? (
+          {filteredItems.length === 0 && !error ? (
             <div className="empty-state">
               <ShoppingCart size={48} />
-              <p>Chưa có sản phẩm nào</p>
+              <p>{searchQuery ? 'Không tìm thấy sản phẩm' : 'Chưa có sản phẩm nào'}</p>
               <p style={{ fontSize: '0.75rem', marginTop: 4, color: 'var(--text-dim)' }}>
-                Các sản phẩm bạn mua thành công sẽ tự động hiển thị ở đây.
+                {searchQuery ? `Thử tìm với từ khóa khác.` : 'Các sản phẩm bạn mua thành công sẽ tự động hiển thị ở đây.'}
               </p>
             </div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              {items.map((entry) => {
+              {filteredItems.map((entry) => {
                 const statusConf = STATUS_CONFIG[entry.status] || STATUS_CONFIG.pending;
                 const StatusIcon = statusConf.icon;
                 const itemId = entry.ebayItemId || '';
@@ -706,6 +825,34 @@ export default function PurchasesPage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Infinite scroll sentinel */}
+          <div ref={loadMoreRef} style={{ minHeight: 1 }} />
+          {loadingMore && (
+            <div style={{
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              gap: 8,
+              padding: '16px 0',
+              color: 'var(--text-dim)',
+              fontSize: '0.75rem',
+            }}>
+              <RefreshCw size={14} className="spinner" />
+              <span>Đang tải thêm sản phẩm...</span>
+            </div>
+          )}
+          {!hasMore && items.length > 0 && !searchQuery && (
+            <div style={{
+              textAlign: 'center',
+              padding: '12px 0',
+              fontSize: '0.7rem',
+              color: 'var(--text-dim)',
+              fontStyle: 'italic',
+            }}>
+              — Đã hiển thị tất cả {items.length} sản phẩm —
             </div>
           )}
         </>
