@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import Link from 'next/link';
 import { ShoppingCart, PackageCheck, Truck, ExternalLink, Package, CreditCard, Clock, Warehouse, CheckCircle, AlertTriangle, X, RefreshCw, FolderOpen, FolderPlus, Search } from 'lucide-react';
 import { PurchaseEntry, Lot } from '@/lib/types';
 import GiaonhanSyncWidget from '@/components/GiaonhanSyncWidget';
@@ -574,40 +575,73 @@ export default function PurchasesPage() {
                     }}
                   >
                     {/* Thumbnail */}
-                    <a
-                      href={`https://www.ebay.com/itm/${entry.ebayItemId}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ flexShrink: 0 }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={entry.imageUrl}
-                        alt=""
-                        style={{
-                          width: 72,
-                          height: 72,
-                          borderRadius: 8,
-                          objectFit: 'cover',
-                          background: 'var(--surface)',
-                        }}
-                      />
-                    </a>
+                    {entry.ebayItemId ? (
+                      <Link
+                        href={`/item/${entry.ebayItemId}`}
+                        style={{ flexShrink: 0 }}
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={entry.imageUrl}
+                          alt=""
+                          style={{
+                            width: 72,
+                            height: 72,
+                            borderRadius: 8,
+                            objectFit: 'cover',
+                            background: 'var(--surface)',
+                          }}
+                        />
+                      </Link>
+                    ) : (
+                      <div style={{ flexShrink: 0 }}>
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={entry.imageUrl}
+                          alt=""
+                          style={{
+                            width: 72,
+                            height: 72,
+                            borderRadius: 8,
+                            objectFit: 'cover',
+                            background: 'var(--surface)',
+                          }}
+                        />
+                      </div>
+                    )}
 
                     {/* Info */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{
-                        fontSize: '0.8rem',
-                        fontWeight: 500,
-                        lineHeight: 1.3,
-                        margin: '0 0 6px',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        overflow: 'hidden',
-                      }}>
-                        {entry.title}
-                      </p>
+                      {entry.ebayItemId ? (
+                        <Link href={`/item/${entry.ebayItemId}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                          <p style={{
+                            fontSize: '0.8rem',
+                            fontWeight: 500,
+                            lineHeight: 1.3,
+                            margin: '0 0 6px',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            cursor: 'pointer',
+                          }}>
+                            {entry.title}
+                          </p>
+                        </Link>
+                      ) : (
+                        <p style={{
+                          fontSize: '0.8rem',
+                          fontWeight: 500,
+                          lineHeight: 1.3,
+                          margin: '0 0 6px',
+                          display: '-webkit-box',
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: 'vertical',
+                          overflow: 'hidden',
+                        }}>
+                          {entry.title}
+                        </p>
+                      )}
 
                       {/* Price row */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>

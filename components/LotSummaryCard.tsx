@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { ChevronDown, ChevronUp, Trash2, Folder, ExternalLink, Lock, CheckCircle2, RefreshCw } from 'lucide-react';
 import { Lot, LotItem } from '@/lib/types';
 
@@ -188,32 +189,68 @@ export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, on
                   borderRadius: 6,
                 }}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={item.imageUrl || ''}
-                  alt=""
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 6,
-                    objectFit: 'cover',
-                    background: 'rgba(0,0,0,0.2)',
-                  }}
-                />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p
+                {item.ebayItemId ? (
+                  <Link href={`/item/${item.ebayItemId}`} style={{ display: 'block', flexShrink: 0 }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.imageUrl || ''}
+                      alt=""
+                      style={{
+                        width: 36,
+                        height: 36,
+                        borderRadius: 6,
+                        objectFit: 'cover',
+                        background: 'rgba(0,0,0,0.2)',
+                      }}
+                    />
+                  </Link>
+                ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={item.imageUrl || ''}
+                    alt=""
                     style={{
-                      fontSize: '0.7rem',
-                      fontWeight: 500,
-                      margin: 0,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      color: 'var(--text)',
+                      width: 36,
+                      height: 36,
+                      borderRadius: 6,
+                      objectFit: 'cover',
+                      background: 'rgba(0,0,0,0.2)',
+                      flexShrink: 0,
                     }}
-                  >
-                    {item.title}
-                  </p>
+                  />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {item.ebayItemId ? (
+                    <Link href={`/item/${item.ebayItemId}`} style={{ textDecoration: 'none' }}>
+                      <p
+                        style={{
+                          fontSize: '0.7rem',
+                          fontWeight: 500,
+                          margin: 0,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                          color: 'var(--text)',
+                        }}
+                      >
+                        {item.title}
+                      </p>
+                    </Link>
+                  ) : (
+                    <p
+                      style={{
+                        fontSize: '0.7rem',
+                        fontWeight: 500,
+                        margin: 0,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        color: 'var(--text)',
+                      }}
+                    >
+                      {item.title}
+                    </p>
+                  )}
                   <p style={{ fontSize: '0.62rem', color: 'var(--text-dim)', margin: '2px 0 0' }}>
                     ${(item.price || 0).toFixed(2)} {item.shipping > 0 ? `+ $${item.shipping.toFixed(2)} ship` : ''}
                   </p>
