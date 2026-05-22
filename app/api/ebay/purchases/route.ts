@@ -4,6 +4,36 @@ import { XMLParser } from 'fast-xml-parser';
 import { supabase } from '@/lib/supabase';
 import { getEbayUsername } from '@/lib/user-identity';
 
+function getWarehouseFromSite(site: string): string {
+  if (!site) return '8';
+  const lowerSite = String(site).trim().toLowerCase();
+  if (lowerSite === 'us' || lowerSite === 'ebaymotors') {
+    return '8'; // Oregon
+  }
+  if (lowerSite === 'japan') {
+    return '2'; // Nhật
+  }
+  if (lowerSite === 'uk') {
+    return '4'; // Anh
+  }
+  if (lowerSite === 'australia') {
+    return '5'; // Úc
+  }
+  if (lowerSite === 'korea') {
+    return '7'; // Hàn Quốc
+  }
+  if (lowerSite === 'germany') {
+    return '11'; // Frankfurt (Đức)
+  }
+  if (lowerSite === 'china' || lowerSite === 'hongkong') {
+    return '17'; // Trung Quốc
+  }
+  if (lowerSite === 'thailand') {
+    return '19'; // Thái Lan
+  }
+  return '8'; // fallback
+}
+
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
 async function getEbayToken(): Promise<string> {
@@ -294,6 +324,10 @@ export async function GET(request: NextRequest) {
           status = 'paid';
         }
 
+        const siteRaw = item.Site?._text ?? item.Site;
+        const itemSite = typeof siteRaw === 'string' ? siteRaw.trim() : '';
+        const defaultWarehouse = getWarehouseFromSite(itemSite);
+
         mappedPurchases.push({
           id: t.TransactionID || t.OrderLineItemID || `p_${itemId}`,
           ebayItemId: itemId,
@@ -310,6 +344,8 @@ export async function GET(request: NextRequest) {
           shippedTime: shippedTime || undefined,
           lo: '1',
           createdAt: t.CreatedDate || order.CreatedTime || new Date().toISOString(),
+          itemSite,
+          defaultWarehouse,
         });
       });
     });

@@ -252,42 +252,7 @@ export async function POST(request: NextRequest) {
             },
           });
 
-          // Auto-assign to current active lot
-          try {
-            const { data: activeLot } = await supabase
-              .from('lots')
-              .select('id')
-              .eq('user_id', userId)
-              .eq('status', 'active')
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-
-            if (activeLot) {
-              let extractedItemId = '';
-              if (itemUrl) {
-                const match = itemUrl.match(/\/itm\/(\d+)/);
-                if (match) {
-                  extractedItemId = match[1];
-                }
-              }
-
-              await supabase.from('lot_items').upsert({
-                user_id: userId,
-                lot_id: activeLot.id,
-                tracking_number: trackingNumber,
-                ebay_item_id: extractedItemId || null,
-                ebay_url: itemUrl || null,
-                title: note || trackingNumber,
-                price: gia || 0,
-                shipping: 0,
-                image_url: imageUrl || null,
-                synced: true,
-              }, { onConflict: 'user_id,tracking_number' });
-            }
-          } catch (lotAssignErr) {
-            console.error('Failed to auto-assign synced item to active lot:', lotAssignErr);
-          }
+          // Auto-assign to current active lot has been removed per plan
         }
       } catch (logErr) {
         console.error('Failed to log tracking sync to database:', logErr);

@@ -60,6 +60,8 @@ export interface PurchaseEntry {
   lotId?: string;     // ID of assigned lot
   lotName?: string;   // Name of assigned lot
   intlShippingVnd?: number; // International shipping in VND
+  itemSite?: string;  // Origin eBay site
+  defaultWarehouse?: string; // Auto-detected warehouse ID
 }
 
 export interface Lot {

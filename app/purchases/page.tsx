@@ -54,6 +54,9 @@ export default function PurchasesPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [syncFilter, setSyncFilter] = useState<'all' | 'synced' | 'unsynced'>('all');
+  const [batchSyncing, setBatchSyncing] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number; currentTitle: string } | null>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   // Expanded lots state (persistent parent state)
@@ -328,10 +331,31 @@ export default function PurchasesPage() {
           setItems(prev => {
             const existingIds = new Set(prev.map(i => i.id));
             const newItems = data.items.filter((i: PurchaseEntry) => !existingIds.has(i.id));
+
+            setWarehouseSelections(prevWh => {
+              const updated = { ...prevWh };
+              newItems.forEach((item: PurchaseEntry) => {
+                if (item.defaultWarehouse && item.ebayItemId && !updated[item.ebayItemId]) {
+                  updated[item.ebayItemId] = item.defaultWarehouse;
+                }
+              });
+              return updated;
+            });
+
             return [...prev, ...newItems];
           });
         } else {
           setItems(data.items);
+
+          setWarehouseSelections(prevWh => {
+            const updated = { ...prevWh };
+            data.items.forEach((item: PurchaseEntry) => {
+              if (item.defaultWarehouse && item.ebayItemId && !updated[item.ebayItemId]) {
+                updated[item.ebayItemId] = item.defaultWarehouse;
+              }
+            });
+            return updated;
+          });
         }
         setCurrentPage(data.page || page);
         setHasMore(!!data.hasMore);
@@ -396,22 +420,28 @@ export default function PurchasesPage() {
 
   // Client-side search filtering
   const filteredItems = useMemo(() => {
-    if (!searchQuery.trim()) return items;
-    const q = searchQuery.trim().toLowerCase();
-    return items.filter(item => {
-      // Match by title
-      if (item.title.toLowerCase().includes(q)) return true;
-      // Match by full tracking number
-      if (item.trackingNumber && item.trackingNumber.toLowerCase().includes(q)) return true;
-      // Match by last 4 digits of tracking
-      if (item.trackingNumber && item.trackingNumber.slice(-4).toLowerCase() === q) return true;
-      // Match by ebay item id
-      if (item.ebayItemId && item.ebayItemId.includes(q)) return true;
-      // Match by lot name
-      if (item.lotName && item.lotName.toLowerCase().includes(q)) return true;
-      return false;
-    });
-  }, [items, searchQuery]);
+    let result = items;
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(item => {
+        if (item.title.toLowerCase().includes(q)) return true;
+        if (item.trackingNumber && item.trackingNumber.toLowerCase().includes(q)) return true;
+        if (item.trackingNumber && item.trackingNumber.slice(-4).toLowerCase() === q) return true;
+        if (item.ebayItemId && item.ebayItemId.includes(q)) return true;
+        if (item.lotName && item.lotName.toLowerCase().includes(q)) return true;
+        return false;
+      });
+    }
+
+    if (syncFilter === 'synced') {
+      result = result.filter(item => item.isSynced === true);
+    } else if (syncFilter === 'unsynced') {
+      result = result.filter(item => !item.isSynced && item.trackingNumber);
+    }
+
+    return result;
+  }, [items, searchQuery, syncFilter]);
 
   const getWarehouseLabel = (id: string) => {
     const wh = WAREHOUSE_OPTIONS.find(w => w.value === id);
@@ -441,6 +471,81 @@ export default function PurchasesPage() {
     } finally {
       setUpdatingWh(prev => ({ ...prev, [ebayItemId]: false }));
     }
+  };
+
+  const handleSyncAll = async () => {
+    const unsynced = items.filter(item => item.trackingNumber && !item.isSynced);
+    if (unsynced.length === 0) return;
+
+    setBatchSyncing(true);
+    setBatchProgress({
+      current: 0,
+      total: unsynced.length,
+      currentTitle: '',
+    });
+
+    let successCount = 0;
+
+    for (let i = 0; i < unsynced.length; i++) {
+      const entry = unsynced[i];
+      const itemId = entry.ebayItemId || '';
+
+      setBatchProgress({
+        current: i + 1,
+        total: unsynced.length,
+        currentTitle: entry.title,
+      });
+
+      try {
+        const tuyen = warehouseSelections[itemId] || entry.defaultWarehouse || '8';
+        const price = Math.round(entry.tong || entry.gia || 0);
+        const isBlock = (entry.tong || entry.gia || 0) >= 1500;
+
+        const res = await fetch('/api/giaonhan247', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            trackingNumber: entry.trackingNumber,
+            tuyen,
+            gia: price,
+            isBlock,
+            reason: isBlock ? 'take a photo' : undefined,
+            itemUrl: `https://www.ebay.com/itm/${entry.ebayItemId}`,
+            imageUrl: entry.imageUrl,
+            note: `eBay Item #${entry.ebayItemId}`,
+          }),
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success) {
+          successCount++;
+          // Update local state item to marked as synced
+          setItems(prev => prev.map(item => {
+            if (item.id === entry.id) {
+              return { ...item, isSynced: true };
+            }
+            return item;
+          }));
+          // Save in localStorage as fallback
+          if (typeof window !== 'undefined' && entry.trackingNumber) {
+            localStorage.setItem(`gn247_synced_${entry.trackingNumber}`, 'true');
+          }
+        } else {
+          console.error(`Failed to sync item ${entry.title}:`, data.error || data.message);
+          addToast('error', `❌ Lỗi sync: ${entry.title}`);
+        }
+      } catch (err) {
+        console.error(`Error syncing item ${entry.title}:`, err);
+        addToast('error', `❌ Lỗi kết nối: ${entry.title}`);
+      }
+
+      // Small delay between sequential requests to prevent resource lock
+      await new Promise(resolve => setTimeout(resolve, 800));
+    }
+
+    setBatchSyncing(false);
+    setBatchProgress(null);
+    addToast('success', `✅ Đã đồng bộ ${successCount}/${unsynced.length} sản phẩm`);
   };
 
   if (loading) {
@@ -645,6 +750,101 @@ export default function PurchasesPage() {
             >
               <X size={14} />
             </button>
+          )}
+        </div>
+      )}
+
+      {/* Sync filter & Sync All actions */}
+      {activeTab === 'all' && items.length > 0 && (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+          marginBottom: 16,
+          flexWrap: 'wrap',
+        }}>
+          {/* Filter Pills */}
+          <div style={{
+            display: 'flex',
+            gap: 4,
+            background: 'rgba(255, 255, 255, 0.03)',
+            padding: 3,
+            borderRadius: 8,
+            border: '1px solid var(--border)',
+          }}>
+            {[
+              { id: 'all', label: 'Tất cả' },
+              { id: 'synced', label: 'Đã đồng bộ ✅' },
+              { id: 'unsynced', label: 'Chưa đồng bộ ⏳' }
+            ].map(pill => {
+              const active = syncFilter === pill.id;
+              return (
+                <button
+                  key={pill.id}
+                  onClick={() => setSyncFilter(pill.id as any)}
+                  style={{
+                    padding: '4px 10px',
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    border: 'none',
+                    background: active ? 'var(--gold)' : 'transparent',
+                    color: active ? '#000' : 'var(--text-muted)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  {pill.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Sync All button & batch status */}
+          {items.filter(item => item.trackingNumber && !item.isSynced).length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {batchSyncing && batchProgress ? (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  fontSize: '0.72rem',
+                  color: 'var(--gold)',
+                  background: 'rgba(212, 175, 55, 0.06)',
+                  padding: '4px 8px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(212, 175, 55, 0.2)',
+                }}>
+                  <RefreshCw size={12} className="spinner" />
+                  <span>
+                    Đang đồng bộ ({batchProgress.current}/{batchProgress.total}): {batchProgress.currentTitle.length > 15 ? batchProgress.currentTitle.substring(0, 15) + '...' : batchProgress.currentTitle}
+                  </span>
+                </div>
+              ) : (
+                <button
+                  onClick={handleSyncAll}
+                  disabled={batchSyncing}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    padding: '6px 12px',
+                    fontSize: '0.72rem',
+                    fontWeight: 600,
+                    borderRadius: 6,
+                    background: 'linear-gradient(135deg, rgba(212, 175, 55, 0.25), rgba(212, 175, 55, 0.15))',
+                    border: '1px solid rgba(212, 175, 55, 0.4)',
+                    color: 'var(--gold)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <RefreshCw size={12} />
+                  Đồng bộ tất cả ({items.filter(item => item.trackingNumber && !item.isSynced).length})
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
