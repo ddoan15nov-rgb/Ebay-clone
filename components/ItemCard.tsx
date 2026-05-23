@@ -192,13 +192,21 @@ export default function ItemCard({
             {item.title}
           </p>
 
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
             <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--gold)' }}>
               ${item.price}
             </span>
+            {item.originalCurrency && item.originalCurrency !== 'USD' && item.originalPrice && (
+              <span style={{ fontSize: '0.68rem', color: 'var(--text-dim)' }}>
+                ({parseFloat(item.originalPrice).toFixed(2)} {item.originalCurrency})
+              </span>
+            )}
             {item.shippingCost && (
               <span style={{ fontSize: '0.6rem', color: 'var(--text-dim)' }}>
                 + ${item.shippingCost} ship
+                {item.originalCurrency && item.originalCurrency !== 'USD' && item.originalShippingCost && (
+                  ` (${parseFloat(item.originalShippingCost).toFixed(2)} ${item.originalCurrency})`
+                )}
               </span>
             )}
           </div>

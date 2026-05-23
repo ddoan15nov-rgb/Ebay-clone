@@ -204,7 +204,7 @@ export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, on
                   boxShadow: !item.intlShippingVnd ? '0 0 10px rgba(241, 196, 15, 0.05)' : 'none',
                   transition: 'all 0.25s ease',
                   position: 'relative',
-                  paddingBottom: item.trackingNumber ? '26px' : '6px',
+                  paddingBottom: item.trackingNumber ? '36px' : '6px',
                 }}
               >
                 {item.ebayItemId ? (
@@ -280,6 +280,9 @@ export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, on
                         ⚠️ Chưa có phí ship VN
                       </span>
                     )}
+                  </p>
+                  <p style={{ fontSize: '0.65rem', color: 'var(--gold)', fontWeight: 600, margin: '2px 0 0' }}>
+                    Tổng cộng: ${((item.price || 0) + (item.shipping || 0) + (item.intlShippingVnd ? item.intlShippingVnd / 27 : 0)).toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                   {/* VND shipping input */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>

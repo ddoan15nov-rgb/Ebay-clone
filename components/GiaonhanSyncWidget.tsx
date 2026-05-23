@@ -22,9 +22,27 @@ const ROUTE_OPTIONS = [
   { value: '19', label: 'Thái Lan' },
 ];
 
+function getDefaultDeclarationPrice(entry: PurchaseEntry, route: string): number {
+  const usdPrice = entry.tong || entry.gia || 0;
+  
+  if (entry.originalCurrency && entry.originalGia) {
+    const origGia = entry.originalGia;
+    const origShip = entry.originalShip || 0;
+    const origTotal = origGia + origShip;
+    
+    // Check if original currency matches the route's native currency
+    if (entry.originalCurrency === 'JPY' && route === '2') return origTotal;
+    if (entry.originalCurrency === 'GBP' && route === '4') return origTotal;
+    if (entry.originalCurrency === 'AUD' && route === '5') return origTotal;
+    if (entry.originalCurrency === 'EUR' && (route === '11' || route === '18')) return origTotal;
+  }
+  
+  return usdPrice;
+}
+
 export default function GiaonhanSyncWidget({ entry, defaultWarehouse }: GiaonhanSyncWidgetProps) {
   const [tuyen, setTuyen] = useState(defaultWarehouse || '8');
-  const [gia, setGia] = useState((entry.tong || entry.gia || 0).toFixed(2));
+  const [gia, setGia] = useState(getDefaultDeclarationPrice(entry, defaultWarehouse || '8').toFixed(2));
   const [isBlock, setIsBlock] = useState((entry.tong || entry.gia || 0) >= 1500);
   const [status, setStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
@@ -34,8 +52,9 @@ export default function GiaonhanSyncWidget({ entry, defaultWarehouse }: Giaonhan
   useEffect(() => {
     if (defaultWarehouse) {
       setTuyen(defaultWarehouse);
+      setGia(getDefaultDeclarationPrice(entry, defaultWarehouse).toFixed(2));
     }
-  }, [defaultWarehouse]);
+  }, [defaultWarehouse, entry]);
 
   useEffect(() => {
     if (entry.isSynced) {
@@ -163,7 +182,11 @@ export default function GiaonhanSyncWidget({ entry, defaultWarehouse }: Giaonhan
                 <label style={{ fontSize: '0.65rem', color: 'var(--text-dim)' }}>Tuyến vận chuyển:</label>
                 <select
                   value={tuyen}
-                  onChange={(e) => setTuyen(e.target.value)}
+                  onChange={(e) => {
+                    const newRoute = e.target.value;
+                    setTuyen(newRoute);
+                    setGia(getDefaultDeclarationPrice(entry, newRoute).toFixed(2));
+                  }}
                   className="input"
                   style={{
                     padding: '4px 8px',

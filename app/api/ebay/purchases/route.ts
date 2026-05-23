@@ -287,22 +287,43 @@ export async function GET(request: NextRequest) {
         allItemIds.add(itemId);
 
         // === Price extraction ===
-        const rawPrice = t.TransactionPrice?._text
-          ?? t.TransactionPrice
-          ?? t.TotalTransactionPrice?._text
-          ?? t.TotalTransactionPrice
-          ?? '0';
-        const price = parseFloat(String(rawPrice));
+        const convertedPriceNode = t.ConvertedTransactionPrice;
+        const transactionPriceNode = t.TransactionPrice;
+        
+        const rawConvertedPrice = convertedPriceNode?._text ?? convertedPriceNode;
+        const rawTransactionPrice = transactionPriceNode?._text ?? transactionPriceNode ?? t.TotalTransactionPrice?._text ?? t.TotalTransactionPrice ?? '0';
+
+        const hasPriceConversion = convertedPriceNode && convertedPriceNode['@_currencyID'] !== transactionPriceNode?.['@_currencyID'];
+
+        const price = parseFloat(String(hasPriceConversion ? rawConvertedPrice : rawTransactionPrice));
+        const originalGia = hasPriceConversion ? parseFloat(String(rawTransactionPrice)) : undefined;
+        const originalCurrency = hasPriceConversion ? transactionPriceNode?.['@_currencyID'] : undefined;
 
         // === Shipping cost ===
         let shipCost = perItemShip;
+        let originalShip = undefined;
+        let originalShipCurrency = undefined;
+
         if (t.ActualShippingCost) {
-          shipCost = parseFloat(t.ActualShippingCost?._text ?? String(t.ActualShippingCost) ?? '0');
+          const rawShip = t.ActualShippingCost?._text ?? String(t.ActualShippingCost) ?? '0';
+          const rawConvertedShip = t.ConvertedActualShippingCost?._text;
+          const hasShipConversion = t.ConvertedActualShippingCost && t.ConvertedActualShippingCost['@_currencyID'] !== t.ActualShippingCost['@_currencyID'];
+
+          shipCost = parseFloat(String(hasShipConversion ? rawConvertedShip : rawShip));
+          if (hasShipConversion) {
+            originalShip = parseFloat(String(rawShip));
+            originalShipCurrency = t.ActualShippingCost?.['@_currencyID'];
+          }
         } else if (t.ShippingServiceSelected?.ShippingServiceCost) {
-          shipCost = parseFloat(
-            t.ShippingServiceSelected.ShippingServiceCost?._text
-            ?? String(t.ShippingServiceSelected.ShippingServiceCost) ?? '0'
-          );
+          const rawShip = t.ShippingServiceSelected.ShippingServiceCost?._text ?? String(t.ShippingServiceSelected.ShippingServiceCost) ?? '0';
+          const rawConvertedShip = t.ShippingServiceSelected.ConvertedShippingServiceCost?._text;
+          const hasShipConversion = t.ShippingServiceSelected.ConvertedShippingServiceCost && t.ShippingServiceSelected.ConvertedShippingServiceCost['@_currencyID'] !== t.ShippingServiceSelected.ShippingServiceCost['@_currencyID'];
+
+          shipCost = parseFloat(String(hasShipConversion ? rawConvertedShip : rawShip));
+          if (hasShipConversion) {
+            originalShip = parseFloat(String(rawShip));
+            originalShipCurrency = t.ShippingServiceSelected.ShippingServiceCost?.['@_currencyID'];
+          }
         }
 
         // === Tracking extraction ===
@@ -346,6 +367,10 @@ export async function GET(request: NextRequest) {
           createdAt: t.CreatedDate || order.CreatedTime || new Date().toISOString(),
           itemSite,
           defaultWarehouse,
+          originalGia: isNaN(originalGia as any) ? undefined : originalGia,
+          originalCurrency,
+          originalShip: isNaN(originalShip as any) ? undefined : originalShip,
+          originalShipCurrency,
         });
       });
     });
@@ -377,6 +402,21 @@ export async function GET(request: NextRequest) {
         existing.gia += item.gia;
         existing.ship = Math.max(existing.ship, item.ship); // shipping is shared
         existing.tong = existing.gia + existing.ship;
+        
+        // Sum original prices if both have them
+        if (existing.originalGia && item.originalGia) {
+          existing.originalGia += item.originalGia;
+        } else if (item.originalGia) {
+          existing.originalGia = (existing.originalGia || 0) + item.originalGia;
+        }
+        
+        // Take max of original shipping (since shipping is shared)
+        if (existing.originalShip && item.originalShip) {
+          existing.originalShip = Math.max(existing.originalShip, item.originalShip);
+        } else if (item.originalShip) {
+          existing.originalShip = item.originalShip;
+        }
+
         existing.mergedTitles = existing.mergedTitles || [existing.originalTitle || existing.title];
         existing.mergedTitles.push(item.title);
         existing.title = existing.mergedTitles

@@ -69,18 +69,35 @@ export async function GET(request: NextRequest) {
     const itemsArray = Array.isArray(watchListItems) ? watchListItems : (watchListItems.ItemID ? [watchListItems] : []);
 
     const mappedItems = itemsArray.map((item: any) => {
-      // eBay Trading API returns prices in SellingStatus.CurrentPrice
-      // Use ?? (nullish coalescing) not || to handle $0 prices correctly
+      // eBay Trading API returns prices in SellingStatus.CurrentPrice and ConvertedCurrentPrice
       const currentPrice = item.SellingStatus?.CurrentPrice;
-      const priceVal = currentPrice?._text ?? currentPrice ?? item.StartPrice?._text ?? item.StartPrice ?? '0';
-      const currency = currentPrice?.['@_currencyID'] || 'USD';
-      
+      const convertedPrice = item.SellingStatus?.ConvertedCurrentPrice;
+
+      const hasConversion = convertedPrice && convertedPrice?.['@_currencyID'] !== currentPrice?.['@_currencyID'];
+
+      const priceVal = hasConversion
+        ? (convertedPrice?._text ?? convertedPrice)
+        : (currentPrice?._text ?? currentPrice ?? item.StartPrice?._text ?? item.StartPrice ?? '0');
+
+      const currency = hasConversion
+        ? (convertedPrice?.['@_currencyID'] || 'USD')
+        : (currentPrice?.['@_currencyID'] || 'USD');
+
+      const originalPrice = hasConversion
+        ? (Number(currentPrice?._text ?? currentPrice) ? Number(currentPrice?._text ?? currentPrice).toFixed(2) : String(currentPrice?._text ?? currentPrice ?? ''))
+        : undefined;
+
+      const originalCurrency = hasConversion
+        ? (currentPrice?.['@_currencyID'] || undefined)
+        : undefined;
+
       const listingTypeRaw = item.ListingType || '';
       const isAuction = ['Chinese', 'Dutch', 'Auction'].includes(listingTypeRaw) 
         || listingTypeRaw.toLowerCase().includes('auction');
 
       // Extract shipping cost — multiple fallback paths for Trading API
       let shippingCost: string | undefined;
+      let originalShippingCost: string | undefined;
       const shippingDetails = item.ShippingDetails;
       if (shippingDetails) {
         // Path 1a: ShippingServiceOption (singular — some endpoints)
@@ -88,9 +105,15 @@ export async function GET(request: NextRequest) {
         // Path 1b: ShippingServiceOptions (plural — watchlist endpoint uses this!)
         const options = option || shippingDetails.ShippingServiceOptions;
         const firstOption = Array.isArray(options) ? options[0] : options;
-        if (firstOption?.ShippingServiceCost) {
+        if (firstOption) {
+          const convertedCost = firstOption.ConvertedShippingServiceCost?._text ?? firstOption.ConvertedShippingServiceCost;
           const cost = firstOption.ShippingServiceCost?._text ?? firstOption.ShippingServiceCost;
-          if (cost !== undefined && cost !== null) {
+          if (convertedCost !== undefined && convertedCost !== null) {
+            shippingCost = String(convertedCost);
+            if (hasConversion && cost !== undefined && cost !== null) {
+              originalShippingCost = String(cost);
+            }
+          } else if (cost !== undefined && cost !== null) {
             shippingCost = String(cost);
           }
         }
@@ -118,6 +141,9 @@ export async function GET(request: NextRequest) {
         title: item.Title,
         price: priceFormatted,
         currency: currency,
+        originalPrice,
+        originalCurrency,
+        originalShippingCost,
         imageUrl: item.PictureDetails?.GalleryURL || '',
         itemWebUrl: item.ListingDetails?.ViewItemURL || `https://www.ebay.com/itm/${item.ItemID}`,
         endTime: item.ListingDetails?.EndTime || '',

@@ -139,6 +139,8 @@ export async function GET(request: NextRequest) {
         title: item.title,
         price: (item.currentBidPrice as Record<string, string>)?.value || (item.price as Record<string, string>)?.value || '0',
         currency: (item.currentBidPrice as Record<string, string>)?.currency || (item.price as Record<string, string>)?.currency || 'USD',
+        originalPrice: (item.currentBidPrice as any)?.convertedFromValue || (item.price as any)?.convertedFromValue || undefined,
+        originalCurrency: (item.currentBidPrice as any)?.convertedFromCurrency || (item.price as any)?.convertedFromCurrency || undefined,
         imageUrl: ((item.thumbnailImages as Record<string, string>[]) || [])[0]?.imageUrl
           || (item.image as Record<string, string>)?.imageUrl
           || '',

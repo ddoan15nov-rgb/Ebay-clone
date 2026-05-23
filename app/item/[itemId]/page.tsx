@@ -420,10 +420,15 @@ export default function ItemDetailPage() {
             {item.title}
           </h1>
 
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
             <span style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--gold)' }}>
-              ${item.price}
+              ${item.price} USD
             </span>
+            {item.originalCurrency && item.originalCurrency !== 'USD' && item.originalPrice && (
+              <span style={{ fontSize: '1rem', color: 'var(--text-dim)', fontWeight: 600 }}>
+                ({parseFloat(item.originalPrice).toFixed(2)} {item.originalCurrency})
+              </span>
+            )}
             {item.listingType === 'AUCTION' && (
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                 <Gavel size={12} /> {item.bidCount !== undefined ? item.bidCount : 0} lượt đấu
@@ -431,7 +436,10 @@ export default function ItemDetailPage() {
             )}
             {item.shippingCost && (
               <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                + ${item.shippingCost} ship
+                + ${item.shippingCost} USD ship
+                {item.originalCurrency && item.originalCurrency !== 'USD' && item.originalShippingCost && (
+                  ` (${parseFloat(item.originalShippingCost).toFixed(2)} ${item.originalCurrency})`
+                )}
               </span>
             )}
           </div>
@@ -576,7 +584,15 @@ export default function ItemDetailPage() {
 
           {/* Gixen Bid Panel */}
           {item.listingType !== 'FIXED_PRICE' && (
-            <BidPanel itemId={item.itemId} currentPrice={item.price} title={item.title} endTime={item.endTime} />
+            <BidPanel
+              itemId={item.itemId}
+              currentPrice={item.price}
+              title={item.title}
+              endTime={item.endTime}
+              currency={item.currency}
+              originalPrice={item.originalPrice}
+              originalCurrency={item.originalCurrency}
+            />
           )}
 
           {/* Description */}

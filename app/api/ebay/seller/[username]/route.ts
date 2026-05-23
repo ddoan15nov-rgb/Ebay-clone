@@ -80,6 +80,8 @@ export async function GET(
       title: item.title,
       price: item.currentBidPrice?.value || item.price?.value || '0',
       currency: item.currentBidPrice?.currency || item.price?.currency || 'USD',
+      originalPrice: item.currentBidPrice?.convertedFromValue || item.price?.convertedFromValue || undefined,
+      originalCurrency: item.currentBidPrice?.convertedFromCurrency || item.price?.convertedFromCurrency || undefined,
       imageUrl: item.thumbnailImages?.[0]?.imageUrl || item.image?.imageUrl || '',
       itemWebUrl: item.itemWebUrl || '',
       endTime: item.itemEndDate || '',

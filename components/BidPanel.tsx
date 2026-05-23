@@ -8,9 +8,12 @@ interface BidPanelProps {
   currentPrice: string;
   title?: string;
   endTime?: string;
+  currency?: string;
+  originalPrice?: string;
+  originalCurrency?: string;
 }
 
-export default function BidPanel({ itemId, currentPrice, title }: BidPanelProps) {
+export default function BidPanel({ itemId, currentPrice, title, currency, originalPrice, originalCurrency }: BidPanelProps) {
   const [maxBid, setMaxBid] = useState('');
   const [activeSnipePrice, setActiveSnipePrice] = useState<string | null>(null);
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -49,6 +52,9 @@ export default function BidPanel({ itemId, currentPrice, title }: BidPanelProps)
       .catch(() => {}); // silent fail — local state still shown
   }, [itemId]);
 
+  const isConverted = originalCurrency && originalCurrency !== 'USD' && originalPrice && currentPrice;
+  const rate = isConverted ? parseFloat(originalPrice) / parseFloat(currentPrice) : 1;
+
   const handleSnipe = () => {
     const bid = parseFloat(maxBid);
     if (!bid || bid <= 0) {
@@ -57,12 +63,14 @@ export default function BidPanel({ itemId, currentPrice, title }: BidPanelProps)
       return;
     }
 
+    const bidInOriginalCurrency = isConverted ? Number((bid * rate).toFixed(2)) : bid;
+
     // Optimistically update UI immediately
     setHasSnipe(true);
     setActiveSnipePrice(bid.toString());
     localStorage.setItem(`gixen_snipe_${itemId}`, bid.toString());
 
-    // Background sync to Supabase
+    // Background sync to Supabase (stores USD bid)
     fetch('/api/sync/snipes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -72,11 +80,11 @@ export default function BidPanel({ itemId, currentPrice, title }: BidPanelProps)
     setStatus('loading');
     setMessage('Đang xử lý ngầm Gixen...');
 
-    // Fire API call in background without blocking
+    // Fire API call in background without blocking (submits original currency bid to Gixen)
     fetch('/api/gixen', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'add', itemId, maxBid: bid }),
+      body: JSON.stringify({ action: 'add', itemId, maxBid: bidInOriginalCurrency }),
     })
       .then((res) => res.json())
       .then((data) => {
@@ -84,7 +92,8 @@ export default function BidPanel({ itemId, currentPrice, title }: BidPanelProps)
           setStatus('success');
           setMessage(`✅ Đã đặt snipe $${bid.toFixed(2)}`);
           // Show popup alert later when done
-          alert(`✅ Thành công: Snipe $${bid.toFixed(2)} cho sản phẩm #${itemId} đã được đặt trên Gixen!`);
+          const currencyLabel = isConverted ? ` (~${bidInOriginalCurrency} ${originalCurrency})` : '';
+          alert(`✅ Thành công: Snipe $${bid.toFixed(2)}${currencyLabel} cho sản phẩm #${itemId} đã được đặt trên Gixen!`);
         } else {
           setStatus('error');
           setMessage(data.error || 'Lỗi đặt snipe');
@@ -180,7 +189,12 @@ export default function BidPanel({ itemId, currentPrice, title }: BidPanelProps)
       </div>
 
       <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 4 }}>
-        Giá hiện tại: <strong style={{ color: 'var(--text)' }}>${currentPrice}</strong>
+        Giá hiện tại: <strong style={{ color: 'var(--text)' }}>${currentPrice} USD</strong>
+        {isConverted && (
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginLeft: 6 }}>
+            ({parseFloat(originalPrice).toFixed(2)} {originalCurrency})
+          </span>
+        )}
       </p>
 
       {hasSnipe && activeSnipePrice && (
@@ -192,7 +206,12 @@ export default function BidPanel({ itemId, currentPrice, title }: BidPanelProps)
           border: '1px solid rgba(46, 204, 113, 0.2)'
         }}>
           <p style={{ fontSize: '0.85rem', color: 'var(--success)', margin: 0, fontWeight: 500 }}>
-            ✨ Bạn đã đặt snipe: <strong>${parseFloat(activeSnipePrice).toFixed(2)}</strong>
+            ✨ Bạn đã đặt snipe: <strong>${parseFloat(activeSnipePrice).toFixed(2)} USD</strong>
+            {isConverted && (
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginLeft: 6, fontWeight: 500 }}>
+                (~{(parseFloat(activeSnipePrice) * rate).toFixed(2)} {originalCurrency})
+              </span>
+            )}
           </p>
         </div>
       )}
@@ -229,6 +248,12 @@ export default function BidPanel({ itemId, currentPrice, title }: BidPanelProps)
           {status === 'loading' ? <Loader2 size={16} className="spinner" /> : (hasSnipe ? 'Cập nhật' : '🎯 Đặt Snipe')}
         </button>
       </div>
+
+      {maxBid && isConverted && (
+        <p style={{ fontSize: '0.72rem', color: 'var(--text-dim)', marginTop: -6, marginBottom: 10, paddingLeft: 4 }}>
+          ≈ <strong>{(parseFloat(maxBid) * rate).toFixed(2)} {originalCurrency}</strong> (tỉ giá {rate.toFixed(4)} {originalCurrency}/USD)
+        </p>
+      )}
 
       {hasSnipe && (
         <button

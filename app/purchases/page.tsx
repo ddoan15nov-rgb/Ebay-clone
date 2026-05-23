@@ -498,7 +498,17 @@ export default function PurchasesPage() {
 
       try {
         const tuyen = warehouseSelections[itemId] || entry.defaultWarehouse || '8';
-        const price = Math.round(entry.tong || entry.gia || 0);
+        let priceValue = entry.tong || entry.gia || 0;
+        if (entry.originalCurrency && entry.originalGia) {
+          const origGia = entry.originalGia;
+          const origShip = entry.originalShip || 0;
+          const origTotal = origGia + origShip;
+          if (entry.originalCurrency === 'JPY' && tuyen === '2') priceValue = origTotal;
+          else if (entry.originalCurrency === 'GBP' && tuyen === '4') priceValue = origTotal;
+          else if (entry.originalCurrency === 'AUD' && tuyen === '5') priceValue = origTotal;
+          else if (entry.originalCurrency === 'EUR' && (tuyen === '11' || tuyen === '18')) priceValue = origTotal;
+        }
+        const price = Math.round(priceValue);
         const isBlock = (entry.tong || entry.gia || 0) >= 1500;
 
         const res = await fetch('/api/giaonhan247', {
@@ -953,11 +963,19 @@ export default function PurchasesPage() {
                       {/* Price row */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--gold)' }}>
-                          ${entry.gia.toFixed(2)}
+                          ${entry.gia.toFixed(2)} USD
                         </span>
+                        {entry.originalCurrency && entry.originalCurrency !== 'USD' && entry.originalGia && (
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                            ({entry.originalGia.toFixed(2)} {entry.originalCurrency})
+                          </span>
+                        )}
                         {entry.ship > 0 && (
                           <span style={{ fontSize: '0.7rem', color: 'var(--text-dim)' }}>
-                            + ${entry.ship.toFixed(2)} ship
+                            + ${entry.ship.toFixed(2)} USD ship
+                            {entry.originalCurrency && entry.originalCurrency !== 'USD' && entry.originalShip && (
+                              ` (${entry.originalShip.toFixed(2)} ${entry.originalCurrency})`
+                            )}
                           </span>
                         )}
                         {entry.ship === 0 && entry.gia > 0 && (

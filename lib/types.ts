@@ -16,6 +16,9 @@ export interface EbayItem {
   listingType: string; // 'AUCTION' | 'FIXED_PRICE'
   bidCount?: number;
   shippingCost?: string;
+  originalPrice?: string;
+  originalCurrency?: string;
+  originalShippingCost?: string;
 }
 
 // eBay item full detail
@@ -62,6 +65,10 @@ export interface PurchaseEntry {
   intlShippingVnd?: number; // International shipping in VND
   itemSite?: string;  // Origin eBay site
   defaultWarehouse?: string; // Auto-detected warehouse ID
+  originalGia?: number;
+  originalCurrency?: string;
+  originalShip?: number;
+  originalShipCurrency?: string;
 }
 
 export interface Lot {
