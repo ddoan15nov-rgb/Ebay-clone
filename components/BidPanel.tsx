@@ -19,6 +19,7 @@ export default function BidPanel({ itemId, currentPrice, title, currency, origin
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [hasSnipe, setHasSnipe] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   // Load snipe from localStorage immediately, then always reconcile with Supabase
   React.useEffect(() => {
@@ -31,7 +32,14 @@ export default function BidPanel({ itemId, currentPrice, title, currency, origin
 
     // Always check Supabase to reconcile (handles cross-device deletes/updates)
     fetch(`/api/sync/snipes?itemId=${itemId}`)
-      .then((r) => r.json())
+      .then((r) => {
+        if (r.status === 401) {
+          setIsAuthenticated(false);
+          throw new Error('Unauthorized');
+        }
+        setIsAuthenticated(true);
+        return r.json();
+      })
       .then((data) => {
         if (data.snipes && data.snipes.length > 0) {
           // Remote has a snipe — update local if different
@@ -49,7 +57,12 @@ export default function BidPanel({ itemId, currentPrice, title, currency, origin
           localStorage.removeItem(`gixen_snipe_${itemId}`);
         }
       })
-      .catch(() => {}); // silent fail — local state still shown
+      .catch((err) => {
+        if (err.message !== 'Unauthorized') {
+          // Network error or other non-401 error, fallback to true so we don't block
+          setIsAuthenticated(true);
+        }
+      }); // silent fail — local state still shown
   }, [itemId]);
 
   const isConverted = originalCurrency && originalCurrency !== 'USD' && originalPrice && currentPrice;
@@ -167,6 +180,50 @@ export default function BidPanel({ itemId, currentPrice, title, currency, origin
         }
       });
   };
+
+  if (isAuthenticated === false) {
+    return (
+      <div
+        style={{
+          background: 'var(--surface)',
+          borderRadius: 'var(--radius)',
+          border: '1px solid var(--border)',
+          padding: 16,
+          marginTop: 16,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <Crosshair size={18} color="var(--gold)" />
+          <span style={{ fontWeight: 700, color: 'var(--gold)', fontSize: '0.95rem' }}>
+            Gixen Snipe
+          </span>
+          <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginLeft: 'auto' }}>
+            Tự động 🤖
+          </span>
+        </div>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          padding: '10px 12px',
+          background: 'rgba(231, 76, 60, 0.1)',
+          borderRadius: 6,
+          border: '1px solid rgba(231, 76, 60, 0.2)',
+          color: 'var(--danger)',
+          fontSize: '0.82rem',
+          lineHeight: '1.4'
+        }}>
+          <AlertCircle size={16} style={{ flexShrink: 0 }} />
+          <span>
+            ⚠️ Bạn cần đăng nhập tài khoản eBay để đặt Snipe.{' '}
+            <a href="/api/auth/login" style={{ color: 'var(--gold)', textDecoration: 'underline', fontWeight: 600 }}>
+              Đăng nhập ngay
+            </a>
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

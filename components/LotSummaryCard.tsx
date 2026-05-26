@@ -190,23 +190,26 @@ export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, on
               Chưa có sản phẩm nào trong lô này.
             </div>
           ) : (
-            items.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  padding: '6px 8px',
-                  background: !item.intlShippingVnd ? 'rgba(241, 196, 15, 0.04)' : 'var(--surface)',
-                  borderRadius: 6,
-                  border: !item.intlShippingVnd ? '1px dashed rgba(241, 196, 15, 0.4)' : '1px solid transparent',
-                  boxShadow: !item.intlShippingVnd ? '0 0 10px rgba(241, 196, 15, 0.05)' : 'none',
-                  transition: 'all 0.25s ease',
-                  position: 'relative',
-                  paddingBottom: item.trackingNumber ? '36px' : '6px',
-                }}
-              >
+            items.map((item) => {
+              const purchaseSubtotal = (item.price || 0) + (item.shipping || 0);
+              const grandTotal = purchaseSubtotal + (item.intlShippingVnd ? item.intlShippingVnd / 27 : 0);
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '6px 8px',
+                    background: !item.intlShippingVnd ? 'rgba(241, 196, 15, 0.04)' : 'var(--surface)',
+                    borderRadius: 6,
+                    border: !item.intlShippingVnd ? '1px dashed rgba(241, 196, 15, 0.4)' : '1px solid transparent',
+                    boxShadow: !item.intlShippingVnd ? '0 0 10px rgba(241, 196, 15, 0.05)' : 'none',
+                    transition: 'all 0.25s ease',
+                    position: 'relative',
+                    paddingBottom: item.trackingNumber ? '48px' : '6px',
+                  }}
+                >
                 {item.ebayItemId ? (
                   <Link href={`/item/${item.ebayItemId}`} style={{ display: 'block', flexShrink: 0 }}>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -281,9 +284,14 @@ export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, on
                       </span>
                     )}
                   </p>
-                  <p style={{ fontSize: '0.65rem', color: 'var(--gold)', fontWeight: 600, margin: '2px 0 0' }}>
-                    Tổng cộng: ${((item.price || 0) + (item.shipping || 0) + (item.intlShippingVnd ? item.intlShippingVnd / 27 : 0)).toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <p style={{ fontSize: '0.65rem', color: 'var(--text-dim)', margin: '2px 0 0' }}>
+                    Tổng mua: <strong style={{ color: 'var(--text)' }}>${purchaseSubtotal.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
                   </p>
+                  {item.intlShippingVnd > 0 && (
+                    <p style={{ fontSize: '0.65rem', color: 'var(--gold)', fontWeight: 600, margin: '2px 0 0' }}>
+                      Tổng cộng (gồm ship VN): ${grandTotal.toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  )}
                   {/* VND shipping input */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                     <input
@@ -400,7 +408,8 @@ export default function LotSummaryCard({ lot, items, onCloseLot, onReopenLot, on
                   </div>
                 )}
               </div>
-            ))
+              );
+            })
           )}
         </div>
       )}

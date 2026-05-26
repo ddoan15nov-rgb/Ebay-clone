@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import puppeteerCore from 'puppeteer-core';
 import chromium from '@sparticuz/chromium';
+import { getEbayUsername } from '@/lib/user-identity';
 
 // Vercel serverless config: Puppeteer needs more time than the default 10s
 export const maxDuration = 60;
@@ -284,6 +285,11 @@ async function getSnipeStatusViaGixen(
 
 export async function GET(request: NextRequest) {
   try {
+    const userId = await getEbayUsername();
+    if (!userId) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
     const searchParams = request.nextUrl.searchParams;
     const itemId = searchParams.get('itemId');
     const username = process.env.GIXEN_USER;
@@ -314,6 +320,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const userId = await getEbayUsername();
+    if (!userId) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+    }
+
     const { action, itemId, maxBid } = await request.json();
     const username = process.env.GIXEN_USER;
     const password = process.env.GIXEN_PASS;

@@ -14,6 +14,12 @@ import { getUserToken } from './ebay-auth';
 export async function getEbayUsername(): Promise<string | null> {
   const cookieStore = cookies();
 
+  // Enforce authentication: check if user has active session cookies
+  const hasSession = cookieStore.has('ebay_user_token') || cookieStore.has('ebay_refresh_token');
+  if (!hasSession) {
+    return null;
+  }
+
   // 1. Check cached username cookie first
   const cached = cookieStore.get('ebay_username')?.value;
   if (cached) return cached;

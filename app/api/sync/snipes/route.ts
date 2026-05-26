@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
   try {
     const userId = await getEbayUsername();
     if (!userId) {
-      return NextResponse.json({ snipes: [] });
+      return NextResponse.json({ error: 'Not authenticated', snipes: [] }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
